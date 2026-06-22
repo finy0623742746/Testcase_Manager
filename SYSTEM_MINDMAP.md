@@ -10,63 +10,65 @@
 ```mermaid
 mindmap
   root((TestCase 管理系統))
-    Product/Version 管理 [已完成]
-      瀏覽 Product/Version 清單 [已完成]
-      新增 Product/Version [已完成]
-      修改 Product/Version [已完成]
-      刪除 Product/Version [已完成]
-      搜尋 Product/Version [已完成]
-      進入 Module/TestCase 頁面 [已完成]
-    Module 管理 [已完成]
-      依 Product/Version 顯示 Module [已完成]
-      新增 Module [已完成]
-      修改 Module 名稱 [已完成]
-      刪除 Module [已完成]
-      刪除 Module 時同步刪除底下 TestCase [已完成]
-      無 Module 時停用新增 TestCase [已完成]
-    TestCase 管理 [已完成]
-      依 Module 顯示 TestCase 清單 [已完成]
-      新增 TestCase [已完成]
-      修改 TestCase [已完成]
-      刪除 TestCase [已完成]
-      預覽 TestCase [已完成]
-      側邊面板編輯 TestCase [已完成]
-      顯示 Case [已完成]
-      顯示 Priority [已完成]
-      顯示 Remark [已完成]
-      顯示 Update 日期 [已完成]
-    TestRun 管理 [未完成]
-      TestRun 重構 [未完成]
-      建立 TestRun [未完成]
-      引用 TestCase [未完成]
-      更新執行狀態 [未完成]
-      查看 TestRun 明細 [未完成]
-    匯入匯出 [未完成]
-      匯出 TestCase 功能 [未完成]
-      匯入 TestCase 功能 [未完成]
-      匯入資料檢核 [未完成]
-      匯出欄位格式定義 [未完成]
-    快捷操作 [未完成]
-      快捷選單 [未完成]
-      常用操作入口 [未完成]
-      批次操作入口 [未完成]
-    API 與系統工具 [已完成]
-      API 文件頁面 [已完成]
-      Product API [已完成]
-      Module API [已完成]
-      TestCase API [已完成]
-      Admin Reset API [已完成]
-      TestRun API [未完成]
-    資料庫與設定 [已完成]
-      SQLite 資料庫 [已完成]
-      testcase_manager.db [已完成]
-      自動建立資料表 [已完成]
-      schema.sql [已完成]
-      .env 設定 [已完成]
-    其他 [未完成]
-      其他待規劃功能 [未完成]
-      UI/UX 細節優化 [未完成]
-      測試案例補齊 [未完成]
+    已完成功能
+      Product/Version 管理
+        瀏覽 Product/Version 清單
+        新增 Product/Version
+        修改 Product/Version
+        刪除 Product/Version
+        搜尋 Product/Version
+        進入 Module/TestCase 頁面
+      Module 管理
+        依 Product/Version 顯示 Module
+        新增 Module
+        修改 Module 名稱
+        刪除 Module
+        刪除 Module 時同步刪除底下 TestCase
+        無 Module 時停用新增 TestCase
+      TestCase 管理
+        依 Module 顯示 TestCase 清單
+        新增 TestCase
+        修改 TestCase
+        刪除 TestCase
+        預覽 TestCase
+        側邊面板編輯 TestCase
+        顯示 Case
+        顯示 Priority
+        顯示 Remark
+        顯示 Update 日期
+      API 與系統工具
+        API 文件頁面
+        Product API
+        Module API
+        TestCase API
+        Admin Reset API
+      資料庫與設定
+        SQLite 資料庫
+        testcase_manager.db
+        自動建立資料表
+        schema.sql
+        .env 設定
+    未完成功能
+      TestRun 重構
+      TestRun 管理
+        建立 TestRun
+        引用 TestCase
+        更新執行狀態
+        查看 TestRun 明細
+        TestRun API
+      匯入匯出
+        匯出 TestCase 功能
+        匯入 TestCase 功能
+        匯入資料檢核
+        匯出欄位格式定義
+      快捷操作
+        快捷選單
+        常用操作入口
+        批次操作入口
+      其他
+        其他待規劃功能
+        UI/UX 細節優化
+        測試案例補齊
 ```
 
 ## 維護規則
@@ -77,4 +79,3 @@ mindmap
 - 新增功能時，先放入對應分類並標示狀態
 - 若功能範圍改變，請同步調整節點名稱，避免後續 TestCase 依據過期
 - 若功能已有明確測試情境，可在節點下方新增更細的操作項目
-
