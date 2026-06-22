@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="page-header">
+  <div>
+    <h1>專案管理</h1>
+    <p>建立專案並引用現有 TestCase，專案可更新狀態。</p>
+  </div>
+</section>
+<div class="grid-two">
+  <div class="panel">
+    <h2>專案列表</h2>
+    {% if projects %}
+      <ul class="simple-list">
+        {% for project in projects %}
+          <li>
+            <a href="{{ url_for('testrun_detail', project_id=project.id) }}">{{ project.name }}</a>
+            <p>{{ project.description or '無描述' }}</p>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p>尚未建立專案。</p>
+    {% endif %}
+  </div>
+  <div class="panel">
+    <h2>新增專案</h2>
+    <form method="post" class="form-card">
+      <div class="field-group">
+        <label>TestRun 名稱</label>
+        <input name="project_name" required>
+      </div>
+      <div class="field-group">
+        <label>描述</label>
+        <textarea name="description" rows="3"></textarea>
+      </div>
+      <div class="field-group">
+        <label>選擇 TestCase</label>
+        <div class="multiselect">
+          {% for case in test_cases %}
+            <label class="checkbox-inline"><input type="checkbox" name="test_case_ids" value="{{ case.id }}"> {{ case.case_title }}</label>
+          {% endfor %}
+        </div>
+      </div>
+      <button type="submit">建立專案</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

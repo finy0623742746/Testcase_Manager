@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="page-header">
+  <div>
+    <h1>TestCase 預覽</h1>
+    <p>{{ case.product_name }} / {{ case.module_name }} / {{ case.case_title }}</p>
+  </div>
+  <div class="actions" data-case-id="{{ case.id }}">
+    <a class="button" href="{{ url_for('edit_testcase', case_id=case.id) }}">修改</a>
+    <button class="button outline danger" id="delete-testcase-button" type="button">刪除</button>
+    <a class="button outline" href="{{ url_for('product_detail', product_id=case.product_id) }}">返回 Product/Version</a>
+  </div>
+</section>
+<div class="panel">
+  <dl class="detail-grid">
+    <dt>Product</dt><dd>{{ case.product_name }}</dd>
+    <dt>Module</dt><dd>{{ case.module_name }}</dd>
+    <dt>Case</dt><dd>{{ case.case_title }}</dd>
+    <dt>Preconditions</dt><dd>{{ case.preconditions or '無' }}</dd>
+    <dt>Steps</dt><dd>{{ case.steps or '無' }}</dd>
+    <dt>Expected Result</dt><dd>{{ case.expected_result or '無' }}</dd>
+    <dt>Remark</dt><dd>{{ case.remark or '無' }}</dd>
+    <dt>Priority</dt><dd>{{ case.priority or 'Medium' }}</dd>
+  </dl>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/testcase_api.js') }}"></script>
+<script>
+  (function () {
+    var container = document.querySelector('[data-case-id]');
+    var deleteButton = document.getElementById('delete-testcase-button');
+    if (!container || !deleteButton) {
+      return;
+    }
+
+    deleteButton.addEventListener('click', async function () {
+      if (!window.confirm('確定刪除此 TestCase？')) {
+        return;
+      }
+
+      try {
+        var caseId = container.getAttribute('data-case-id');
+        await window.testcaseApi.requestJson('/api/testcases/' + caseId, {
+          method: 'DELETE',
+        });
+        window.showToast('TestCase 已刪除', 'success', 'top-center');
+        window.setTimeout(function () {
+          window.location.href = '/testcases/' + '{{ case.product_id }}';
+        }, 500);
+      } catch (error) {
+        window.showToast('刪除 TestCase 失敗：' + error.message, 'error');
+      }
+    });
+  })();
+</script>
+{% endblock %}

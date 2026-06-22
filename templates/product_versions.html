@@ -1,0 +1,400 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="page-header">
+  <div>
+    <h1>Product/Version</h1>
+    <p>點擊項目進入 TestCase 管理頁</p>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel-heading">
+    <div class="panel-title">
+      項目列表
+    </div>
+    <button class="icon-button product-add-button" id="open-product-modal-button" type="button" aria-label="新增 Product/Version">＋</button>
+  </div>
+
+  <ul id="product-list" class="product-list" aria-label="Product/Version 清單">
+    {% for product in products %}
+      <li class="product-list-item" data-product-id="{{ product.id }}" data-product-name="{{ product.name }}">
+        <div class="product-list-main">
+          <div class="product-name-row">
+            <a class="product-card-link product-name-link" href="{{ url_for('product_detail', product_id=product.id) }}" data-product-link>
+              <span class="product-folder-icon" aria-hidden="true">📁</span>
+              <span class="product-name-text" data-product-name-text>{{ product.name }}</span>
+            </a>
+            <button class="icon-button product-edit-button" type="button" data-edit-product="{{ product.id }}" aria-label="修改 {{ product.name }}">✎</button>
+            <button class="icon-button product-delete-button" type="button" data-delete-product="{{ product.id }}" data-product-name="{{ product.name }}" aria-label="刪除 {{ product.name }}"><b>🗑</b></button>
+          </div>
+          <div class="product-inline-edit is-hidden" data-product-editor>
+            <input class="product-name-input" type="text" value="{{ product.name }}" aria-label="Product/Version 名稱" data-product-input>
+            <button class="icon-button icon-button-cancel" type="button" data-cancel-product-edit aria-label="取消修改 {{ product.name }}">X</button>
+            <button class="icon-button icon-button-success" type="button" data-save-product="{{ product.id }}" aria-label="保存 {{ product.name }}">✓</button>
+            <button class="icon-button product-delete-button product-delete-button-inline" type="button" data-delete-product="{{ product.id }}" data-product-name="{{ product.name }}" aria-label="刪除 {{ product.name }}"><b>🗑</b></button>
+          </div>
+        </div>
+      </li>
+    {% else %}
+      <li class="empty-state">尚未有任何 Product/Version</li>
+    {% endfor %}
+  </ul>
+
+</section>
+
+<template id="product-draft-template">
+  <li class="product-list-item is-editing is-new-product" data-product-id="draft" data-product-name="" data-new-product="true">
+    <div class="product-list-main">
+      <div class="product-name-row">
+        <a class="product-card-link product-name-link is-hidden" href="#" data-product-link>
+          <span class="product-folder-icon" aria-hidden="true">📁</span>
+          <span class="product-name-text" data-product-name-text></span>
+        </a>
+        <button class="icon-button product-edit-button is-hidden" type="button" data-edit-product aria-label="修改">✎</button>
+        <button class="icon-button product-delete-button is-hidden" type="button" data-delete-product data-product-name="" aria-label="刪除"><b>🗑</b></button>
+      </div>
+      <div class="product-inline-edit" data-product-editor>
+        <input class="product-name-input" type="text" value="" aria-label="Product/Version 名稱" data-product-input>
+        <button class="icon-button icon-button-cancel" type="button" data-cancel-product-edit aria-label="取消新增">X</button>
+        <button class="icon-button icon-button-success" type="button" data-save-product-new aria-label="保存新增">✓</button>
+        <button class="icon-button product-delete-button product-delete-button-inline is-hidden" type="button" data-delete-product data-product-name="" aria-label="刪除"><b>🗑</b></button>
+      </div>
+    </div>
+  </li>
+</template>
+
+<script src="{{ url_for('static', filename='js/testcase_api.js') }}"></script>
+<script>
+  (function () {
+    var addButton = document.getElementById('open-product-modal-button');
+    var productList = document.getElementById('product-list');
+    var draftTemplate = document.getElementById('product-draft-template');
+    var editingRow = null;
+    var draftRow = null;
+
+    function isDraftRow(row) {
+      return row && row.getAttribute('data-new-product') === 'true';
+    }
+
+    function getRow(productId) {
+      return productList.querySelector('[data-product-id="' + productId + '"]');
+    }
+
+    function focusRowInput(row) {
+      if (!row) {
+        return;
+      }
+
+      var input = row.querySelector('[data-product-input]');
+      window.setTimeout(function () {
+        input.focus();
+        input.select();
+      }, 0);
+    }
+
+    function createDraftRow() {
+      if (draftRow && productList.contains(draftRow)) {
+        setRowEditing(draftRow, true);
+        focusRowInput(draftRow);
+        return draftRow;
+      }
+
+      if (editingRow && !isDraftRow(editingRow)) {
+        setRowEditing(editingRow, false);
+      }
+
+      if (!draftTemplate) {
+        return null;
+      }
+
+      var templateRow = draftTemplate.content.firstElementChild;
+      if (!templateRow) {
+        return null;
+      }
+
+      draftRow = templateRow.cloneNode(true);
+      productList.prepend(draftRow);
+      setRowEditing(draftRow, true);
+      focusRowInput(draftRow);
+      return draftRow;
+    }
+
+    function clearDraftRow() {
+      if (draftRow && draftRow.parentNode) {
+        draftRow.parentNode.removeChild(draftRow);
+      }
+      draftRow = null;
+      if (editingRow && isDraftRow(editingRow)) {
+        editingRow = null;
+      }
+    }
+
+    function setRowEditing(row, isEditing) {
+      if (!row) {
+        return;
+      }
+
+      var link = row.querySelector('[data-product-link]');
+      var nameText = row.querySelector('[data-product-name-text]');
+      var editor = row.querySelector('[data-product-editor]');
+      var input = row.querySelector('[data-product-input]');
+      var editButton = row.querySelector('[data-edit-product]');
+      var normalDeleteButton = row.querySelector('.product-name-row .product-delete-button');
+      var inlineDeleteButton = row.querySelector('.product-inline-edit .product-delete-button');
+      var draftMode = isDraftRow(row);
+
+      row.classList.toggle('is-editing', isEditing);
+      if (link) {
+        link.classList.toggle('is-hidden', isEditing || draftMode);
+      }
+      editor.classList.toggle('is-hidden', !isEditing);
+      if (editButton) {
+        editButton.classList.toggle('is-hidden', isEditing || draftMode);
+      }
+      if (normalDeleteButton) {
+        normalDeleteButton.classList.toggle('is-hidden', isEditing || draftMode);
+      }
+      if (inlineDeleteButton) {
+        inlineDeleteButton.classList.toggle('is-hidden', !isEditing || draftMode);
+      }
+
+      if (isEditing) {
+        if (draftMode) {
+          input.value = input.value || '';
+          input.dataset.originalValue = '';
+        } else {
+          input.value = nameText.textContent.trim();
+          input.dataset.originalValue = input.value;
+        }
+        editingRow = row;
+      } else if (editingRow === row) {
+        editingRow = null;
+      }
+    }
+
+    function finalizeDraftRow(row, product) {
+      row.dataset.newProduct = 'false';
+      row.setAttribute('data-product-id', product.id);
+      row.setAttribute('data-product-name', product.name);
+
+      var link = row.querySelector('[data-product-link]');
+      var nameText = row.querySelector('[data-product-name-text]');
+      var deleteButton = row.querySelector('[data-delete-product]');
+      var inlineDeleteButton = row.querySelector('.product-inline-edit .product-delete-button');
+
+      if (link) {
+        link.setAttribute('href', '/testcases/' + product.id);
+      }
+
+      if (nameText) {
+        nameText.textContent = product.name;
+      }
+
+      if (deleteButton) {
+        deleteButton.setAttribute('data-delete-product', product.id);
+        deleteButton.setAttribute('data-product-name', product.name);
+      }
+
+      if (inlineDeleteButton) {
+        inlineDeleteButton.setAttribute('data-delete-product', product.id);
+        inlineDeleteButton.setAttribute('data-product-name', product.name);
+      }
+
+      // 移除空狀態消息
+      var emptyState = productList.querySelector('.empty-state');
+      if (emptyState) {
+        emptyState.parentNode.removeChild(emptyState);
+      }
+    }
+
+    async function saveRow(row) {
+      if (!row) {
+        return;
+      }
+
+      var input = row.querySelector('[data-product-input]');
+      var saveButton = row.querySelector('[data-save-product], [data-save-product-new]');
+      var link = row.querySelector('[data-product-link]');
+      var nameText = row.querySelector('[data-product-name-text]');
+      var deleteButton = row.querySelector('[data-delete-product]');
+      var name = (input.value || '').trim();
+      var draftMode = isDraftRow(row);
+
+      if (!name) {
+        window.showToast('請輸入 Product/Version 名稱', 'error');
+        input.focus();
+        return;
+      }
+
+      saveButton.disabled = true;
+      saveButton.textContent = '...';
+
+      try {
+        if (draftMode) {
+          var product = await window.testcaseApi.requestJson('/api/products', {
+            method: 'POST',
+            body: JSON.stringify({ name: name }),
+          });
+          finalizeDraftRow(row, product);
+          row.classList.remove('is-new-product');
+          setRowEditing(row, false);
+          draftRow = null;
+          window.showToast('Product/Version 已建立', 'success', 'top-center');
+        } else {
+          var productId = row.getAttribute('data-product-id');
+          await window.testcaseApi.requestJson('/api/products/' + productId, {
+            method: 'PUT',
+            body: JSON.stringify({ name: name }),
+          });
+          row.setAttribute('data-product-name', name);
+          if (nameText) {
+            nameText.textContent = name;
+          }
+          if (deleteButton) {
+            deleteButton.setAttribute('data-product-name', name);
+          }
+          setRowEditing(row, false);
+          window.showToast('Product/Version 已更新', 'success', 'top-center');
+        }
+      } catch (error) {
+        window.showToast((draftMode ? '建立失敗：' : '更新失敗：') + error.message, 'error');
+      } finally {
+        saveButton.disabled = false;
+        saveButton.textContent = '✓';
+      }
+    }
+
+    addButton.addEventListener('click', function () {
+      createDraftRow();
+    });
+
+    productList.addEventListener('click', function (event) {
+      var button = event.target.closest('button');
+      if (button) {
+        var row = button.closest('[data-product-id]');
+        if (!row) {
+          return;
+        }
+
+        if (button.hasAttribute('data-edit-product')) {
+          if (row === editingRow) {
+            focusRowInput(row);
+            return;
+          }
+
+          if (editingRow) {
+            if (isDraftRow(editingRow)) {
+              clearDraftRow();
+            } else {
+              setRowEditing(editingRow, false);
+            }
+          }
+
+          setRowEditing(row, true);
+          focusRowInput(row);
+          return;
+        }
+
+        if (button.hasAttribute('data-save-product') || button.hasAttribute('data-save-product-new')) {
+          saveRow(row);
+          return;
+        }
+
+        if (button.hasAttribute('data-cancel-product-edit')) {
+          if (isDraftRow(row)) {
+            clearDraftRow();
+          } else {
+            var input = row.querySelector('[data-product-input]');
+            input.value = input.dataset.originalValue || input.value;
+            setRowEditing(row, false);
+          }
+          return;
+        }
+
+        if (button.hasAttribute('data-delete-product')) {
+          var productId = button.getAttribute('data-delete-product');
+          var productName = button.getAttribute('data-product-name') || '此 Product/Version';
+          if (!window.confirm('確定刪除 ' + productName + ' 嗎？')) {
+            return;
+          }
+
+          window.testcaseApi.requestJson('/api/products/' + productId, {
+            method: 'DELETE',
+          }).then(function () {
+            window.showToast('Product/Version 已刪除', 'success', 'top-center');
+            window.location.reload();
+          }).catch(function (error) {
+            window.showToast('刪除失敗：' + error.message, 'error');
+          });
+        }
+        return;
+      }
+
+      var clickedRow = event.target.closest('[data-product-id]');
+      if (!clickedRow || isDraftRow(clickedRow) || editingRow === clickedRow) {
+        return;
+      }
+
+      if (event.target.closest('input, textarea, select, a')) {
+        return;
+      }
+
+      var link = clickedRow.querySelector('[data-product-link]');
+      if (link && link.href) {
+        window.location.href = link.href;
+      }
+    });
+
+    document.addEventListener('click', function (event) {
+      if (!editingRow || isDraftRow(editingRow)) {
+        return;
+      }
+
+      if (editingRow.contains(event.target)) {
+        return;
+      }
+
+      setRowEditing(editingRow, false);
+    });
+
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') {
+        if (editingRow) {
+          if (isDraftRow(editingRow)) {
+            clearDraftRow();
+          } else {
+            setRowEditing(editingRow, false);
+          }
+        }
+      }
+    });
+
+    productList.addEventListener('keydown', function (event) {
+      var row = event.target.closest('[data-product-id]');
+      if (!row) {
+        return;
+      }
+
+      if (event.target.matches('[data-product-input]')) {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          saveRow(row);
+          return;
+        }
+
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          if (isDraftRow(row)) {
+            clearDraftRow();
+          } else {
+            var input = event.target;
+            input.value = input.dataset.originalValue || input.value;
+            setRowEditing(row, false);
+          }
+        }
+      }
+    });
+
+  })();
+</script>
+{% endblock %}

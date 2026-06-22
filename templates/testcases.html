@@ -1,0 +1,538 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="page-header">
+  <div>
+    <h1>TestCase</h1>
+  </div>
+  <button class="button" id="open-create-modal-button" type="button">新增</button>
+</section>
+<div class="grid">
+  <div class="panel">
+    <div class="table-wrap">
+      <table class="cases-table">
+        <thead>
+          <tr>
+            <th>Product/Version</th>
+            <th>Module</th>
+            <th>Case</th>
+            <th>Priority</th>
+            <th>Update</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="cases-table-body">
+          <tr>
+            <td colspan="6" class="empty-state">載入中...</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- 側面板預覽 -->
+<div id="preview-drawer" class="preview-drawer">
+  <div class="preview-drawer-header">
+    <h2 id="preview-title">預覽</h2>
+    <button id="close-preview-button" class="close-button" type="button">✕</button>
+  </div>
+  <div class="preview-drawer-content">
+    <div class="detail-grid" id="preview-detail">
+      <div class="empty-state">載入中...</div>
+    </div>
+    <div class="drawer-actions">
+      <button id="preview-edit-button" class="button" type="button">修改</button>
+      <button id="preview-save-button" class="button outline is-hidden" type="button" aria-hidden="true">保存</button>
+    </div>
+  </div>
+</div>
+<div id="preview-overlay" class="preview-overlay"></div>
+
+<div id="create-modal" class="modal-shell" aria-hidden="true">
+  <div class="modal-overlay" data-close-create-modal></div>
+  <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="create-modal-title">
+    <div class="modal-header">
+      <h2 id="create-modal-title">新增 TestCase</h2>
+      <button class="close-button" id="close-create-modal-button" type="button">✕</button>
+    </div>
+    <div class="modal-content">
+      <form class="form-card modal-form" id="create-testcase-form">
+        <div class="field-group">
+          <label>Product/Version <span class="required-mark">*</span></label>
+          <input name="product_name" placeholder="輸入產品/版本名稱">
+          <div class="field-error" data-error-for="product_name"></div>
+        </div>
+        <div class="field-group">
+          <label>Module <span class="required-mark">*</span></label>
+          <input name="module_name" placeholder="輸入功能模組名稱">
+          <div class="field-error" data-error-for="module_name"></div>
+        </div>
+        <div class="field-group">
+          <label>Case <span class="required-mark">*</span></label>
+          <input name="case_title" placeholder="輸入測試案例標題">
+          <div class="field-error" data-error-for="case_title"></div>
+        </div>
+        <div class="field-group">
+          <label>Preconditions</label>
+          <textarea name="preconditions" rows="3"></textarea>
+        </div>
+        <div class="field-group">
+          <label>Step <span class="required-mark">*</span></label>
+          <textarea name="steps" rows="4"></textarea>
+          <div class="field-error" data-error-for="steps"></div>
+        </div>
+        <div class="field-group">
+          <label>Expected Result <span class="required-mark">*</span></label>
+          <textarea name="expected_result" rows="3"></textarea>
+          <div class="field-error" data-error-for="expected_result"></div>
+        </div>
+        <div class="field-group">
+          <label>Priority</label>
+          <select name="priority">
+            <option value="Low">Low</option>
+            <option value="Medium" selected>Medium</option>
+            <option value="High">High</option>
+          </select>
+        </div>
+        <div class="field-group">
+          <label>Remark</label>
+          <textarea name="remark" rows="3"></textarea>
+        </div>
+        <div class="button-row">
+          <button type="submit" id="create-testcase-submit-button">新增</button>
+          <button class="button outline" type="button" data-close-create-modal>取消</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/testcase_api.js') }}"></script>
+<script>
+  (function () {
+    var tableBody = document.getElementById('cases-table-body');
+    var openCreateModalButton = document.getElementById('open-create-modal-button');
+    var createModal = document.getElementById('create-modal');
+    var closeCreateModalButton = document.getElementById('close-create-modal-button');
+    var createTestcaseForm = document.getElementById('create-testcase-form');
+    var createSubmitButton = document.getElementById('create-testcase-submit-button');
+    var createRequiredFields = ['product_name', 'module_name', 'case_title', 'steps', 'expected_result'];
+    var searchParams = new URLSearchParams(window.location.search);
+    var currentQuery = (searchParams.get('q') || '').trim();
+    var activeCase = null;
+    var isEditing = false;
+
+    function escapeHtml(value) {
+      return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function priorityBadge(priority) {
+      var value = priority || 'Medium';
+      return '<span class="priority-badge priority-' + value.toLowerCase() + '">' + escapeHtml(value) + '</span>';
+    }
+
+    function formatDate(value) {
+      return value ? value.slice(0, 10) : 'N/A';
+    }
+
+    function displayValue(value) {
+      return String(value || '').trim() ? value : 'N/A';
+    }
+
+    function withLineBreaks(value) {
+      return escapeHtml(displayValue(value)).replace(/\n/g, '<br>');
+    }
+
+    function caseRow(item) {
+      return (
+        '<tr data-case-id="' + item.id + '">' +
+          '<td>' + escapeHtml(displayValue(item.product_name)) + '</td>' +
+          '<td>' + escapeHtml(displayValue(item.module_name)) + '</td>' +
+          '<td>' + escapeHtml(displayValue(item.case_title)) + '</td>' +
+          '<td>' + priorityBadge(item.priority) + '</td>' +
+          '<td>' + escapeHtml(formatDate(item.updated_at || item.created_at)) + '</td>' +
+          '<td>' +
+            '<div class="actions compact">' +
+              '<button class="button outline" type="button" data-preview-case="' + item.id + '">預覽</button>' +
+              '<button class="button danger" type="button" data-delete-case="' + item.id + '">刪除</button>' +
+            '</div>' +
+          '</td>' +
+        '</tr>'
+      );
+    }
+
+    function setCreateFieldError(fieldName, message) {
+      var field = createTestcaseForm.querySelector('[name="' + fieldName + '"]');
+      var errorNode = createTestcaseForm.querySelector('[data-error-for="' + fieldName + '"]');
+      if (!field || !errorNode) {
+        return;
+      }
+      errorNode.textContent = message || '';
+      field.classList.toggle('is-invalid', Boolean(message));
+    }
+
+    function validateCreateField(fieldName) {
+      var field = createTestcaseForm.querySelector('[name="' + fieldName + '"]');
+      if (!field) {
+        return true;
+      }
+      var isValid = Boolean((field.value || '').trim());
+      setCreateFieldError(fieldName, isValid ? '' : '請輸入欄位');
+      return isValid;
+    }
+
+    function resetCreateForm() {
+      createTestcaseForm.reset();
+      createTestcaseForm.querySelector('[name="priority"]').value = 'Medium';
+      createRequiredFields.forEach(function (fieldName) {
+        setCreateFieldError(fieldName, '');
+      });
+      createSubmitButton.disabled = false;
+      createSubmitButton.textContent = '新增';
+    }
+
+    function openCreateModal() {
+      resetCreateForm();
+      createModal.classList.add('active');
+      createModal.setAttribute('aria-hidden', 'false');
+    }
+
+    function closeCreateModal() {
+      createModal.classList.remove('active');
+      createModal.setAttribute('aria-hidden', 'true');
+    }
+
+    async function loadCases() {
+      try {
+        var apiUrl = '/api/testcases';
+        if (currentQuery) {
+          apiUrl += '?q=' + encodeURIComponent(currentQuery);
+        }
+        var payload = await window.testcaseApi.requestJson(apiUrl);
+        var cases = payload.data || [];
+        if (!cases.length) {
+          tableBody.innerHTML = '<tr><td colspan="6" class="empty-state">' +
+            (currentQuery ? '查無符合的 TestCase。' : '尚未有任何 TestCase。') +
+            '</td></tr>';
+          return;
+        }
+        tableBody.innerHTML = cases.map(caseRow).join('');
+      } catch (error) {
+        tableBody.innerHTML = '<tr><td colspan="6" class="empty-state">載入失敗：' + escapeHtml(error.message) + '</td></tr>';
+        window.showToast('載入 TestCase 失敗：' + error.message, 'error');
+      }
+    }
+
+    createRequiredFields.forEach(function (fieldName) {
+      var field = createTestcaseForm.querySelector('[name="' + fieldName + '"]');
+      if (!field) {
+        return;
+      }
+      field.addEventListener('blur', function () {
+        validateCreateField(fieldName);
+      });
+      field.addEventListener('input', function () {
+        if ((field.value || '').trim()) {
+          setCreateFieldError(fieldName, '');
+        }
+      });
+    });
+
+    openCreateModalButton.addEventListener('click', openCreateModal);
+    closeCreateModalButton.addEventListener('click', closeCreateModal);
+    createModal.querySelectorAll('[data-close-create-modal]').forEach(function (element) {
+      element.addEventListener('click', closeCreateModal);
+    });
+
+    createTestcaseForm.addEventListener('submit', async function (event) {
+      event.preventDefault();
+
+      var hasErrors = false;
+      createRequiredFields.forEach(function (fieldName) {
+        if (!validateCreateField(fieldName)) {
+          hasErrors = true;
+        }
+      });
+      if (hasErrors) {
+        window.showToast('請先完成必填欄位', 'error', 'top-center');
+        return;
+      }
+
+      createSubmitButton.disabled = true;
+      createSubmitButton.textContent = '新增中...';
+
+      try {
+        var formData = new FormData(createTestcaseForm);
+        var productName = (formData.get('product_name') || '').trim();
+        var moduleName = (formData.get('module_name') || '').trim();
+        var moduleId = await window.testcaseApi.resolveModuleId(productName, moduleName);
+        var payload = {
+          module_id: moduleId,
+          case_title: (formData.get('case_title') || '').trim(),
+          preconditions: (formData.get('preconditions') || '').trim(),
+          steps: (formData.get('steps') || '').trim(),
+          expected_result: (formData.get('expected_result') || '').trim(),
+          remark: (formData.get('remark') || '').trim(),
+          priority: formData.get('priority') || 'Medium',
+        };
+
+        await window.testcaseApi.requestJson('/api/testcases', {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
+
+        closeCreateModal();
+        loadCases();
+        window.showToast('TestCase 已建立', 'success', 'top-center');
+      } catch (error) {
+        createSubmitButton.disabled = false;
+        createSubmitButton.textContent = '新增';
+        window.showToast('建立 TestCase 失敗：' + error.message, 'error');
+      }
+    });
+
+    tableBody.addEventListener('click', async function (event) {
+      var previewButton = event.target.closest('[data-preview-case]');
+      if (previewButton) {
+        event.preventDefault();
+        var caseId = previewButton.getAttribute('data-preview-case');
+        window.openPreviewDrawer(caseId);
+        return;
+      }
+
+      var deleteButton = event.target.closest('[data-delete-case]');
+      if (!deleteButton) {
+        return;
+      }
+
+      if (!window.confirm('確定刪除此 TestCase？')) {
+        return;
+      }
+
+      try {
+        var caseId = deleteButton.getAttribute('data-delete-case');
+        await window.testcaseApi.requestJson('/api/testcases/' + caseId, {
+          method: 'DELETE',
+        });
+        var row = deleteButton.closest('tr');
+        if (row) {
+          row.remove();
+        }
+        if (!tableBody.querySelector('tr')) {
+          tableBody.innerHTML = '<tr><td colspan="6" class="empty-state">尚未有任何 TestCase。</td></tr>';
+        }
+        window.showToast('TestCase 已刪除', 'success', 'top-center');
+      } catch (error) {
+        window.showToast('刪除 TestCase 失敗：' + error.message, 'error');
+      }
+    });
+
+    // 預覽面板相關函數
+    var previewDrawer = document.getElementById('preview-drawer');
+    var previewOverlay = document.getElementById('preview-overlay');
+    var closePreviewButton = document.getElementById('close-preview-button');
+    var previewTitle = document.getElementById('preview-title');
+    var previewDetail = document.getElementById('preview-detail');
+    var previewEditButton = document.getElementById('preview-edit-button');
+    var previewSaveButton = document.getElementById('preview-save-button');
+    var drawerRequiredFields = ['product_name', 'module_name', 'case_title', 'steps', 'expected_result'];
+
+    function setDrawerFieldError(fieldName, message) {
+      var field = previewDetail.querySelector('[name="' + fieldName + '"]');
+      var errorNode = previewDetail.querySelector('[data-error-for="' + fieldName + '"]');
+      if (!field || !errorNode) {
+        return;
+      }
+      errorNode.textContent = message || '';
+      field.classList.toggle('is-invalid', Boolean(message));
+    }
+
+    function validateDrawerField(fieldName) {
+      var field = previewDetail.querySelector('[name="' + fieldName + '"]');
+      if (!field) {
+        return true;
+      }
+      var isValid = Boolean((field.value || '').trim());
+      setDrawerFieldError(fieldName, isValid ? '' : '請輸入欄位');
+      return isValid;
+    }
+
+    function bindDrawerValidation() {
+      drawerRequiredFields.forEach(function (fieldName) {
+        var field = previewDetail.querySelector('[name="' + fieldName + '"]');
+        if (!field) {
+          return;
+        }
+        field.addEventListener('blur', function () {
+          validateDrawerField(fieldName);
+        });
+        field.addEventListener('input', function () {
+          if ((field.value || '').trim()) {
+            setDrawerFieldError(fieldName, '');
+          }
+        });
+      });
+    }
+
+    function setDrawerEditMode(isEditMode) {
+      isEditing = isEditMode;
+      previewEditButton.classList.toggle('is-hidden', isEditMode);
+      previewEditButton.setAttribute('aria-hidden', isEditMode ? 'true' : 'false');
+      previewSaveButton.classList.toggle('is-hidden', !isEditMode);
+      previewSaveButton.setAttribute('aria-hidden', !isEditMode ? 'true' : 'false');
+    }
+
+    function renderPreviewDetail(caseData) {
+      previewTitle.textContent = caseData.case_title || '預覽';
+      var html = '';
+      html += '<section class="drawer-section">';
+      html += '<div class="drawer-meta-grid">';
+      html += '<div class="drawer-meta-card"><div class="drawer-field-label">Product/Version</div><div class="drawer-field-value">' + escapeHtml(displayValue(caseData.product_name)) + '</div></div>';
+      html += '<div class="drawer-meta-card"><div class="drawer-field-label">Module</div><div class="drawer-field-value">' + escapeHtml(displayValue(caseData.module_name)) + '</div></div>';
+      html += '<div class="drawer-meta-card drawer-meta-card-wide"><div class="drawer-field-label">Priority</div><div class="drawer-field-value">' + escapeHtml(caseData.priority || 'Medium') + '</div></div>';
+      html += '</div>';
+      html += '</section>';
+      html += '<section class="drawer-section">';
+      html += '<div class="drawer-content-stack">';
+      html += '<div class="drawer-content-card"><div class="drawer-field-label">Preconditions</div><div class="drawer-field-value preserve-wrap">' + withLineBreaks(caseData.preconditions) + '</div></div>';
+      html += '<div class="drawer-content-card"><div class="drawer-field-label">Steps</div><div class="drawer-field-value preserve-wrap">' + withLineBreaks(caseData.steps) + '</div></div>';
+      html += '<div class="drawer-content-card"><div class="drawer-field-label">Expected Result</div><div class="drawer-field-value preserve-wrap">' + withLineBreaks(caseData.expected_result) + '</div></div>';
+      html += '<div class="drawer-content-card"><div class="drawer-field-label">Remark</div><div class="drawer-field-value preserve-wrap">' + withLineBreaks(caseData.remark) + '</div></div>';
+      html += '</div>';
+      html += '</section>';
+      previewDetail.innerHTML = html;
+      setDrawerEditMode(false);
+      previewSaveButton.disabled = false;
+      previewSaveButton.textContent = '保存';
+    }
+
+    function renderEditDetail(caseData) {
+      previewTitle.textContent = '修改 TestCase';
+      var html = '';
+      html += '<section class="drawer-section">';
+      html += '<div class="drawer-form-grid">';
+      html += '<div class="drawer-form-card"><label class="drawer-field-label">Product <span class="required-mark">*</span></label><input name="product_name" value="' + escapeHtml(caseData.product_name) + '"><div class="field-error" data-error-for="product_name"></div></div>';
+      html += '<div class="drawer-form-card"><label class="drawer-field-label">Module <span class="required-mark">*</span></label><input name="module_name" value="' + escapeHtml(caseData.module_name) + '"><div class="field-error" data-error-for="module_name"></div></div>';
+      html += '<div class="drawer-form-card drawer-form-card-wide"><label class="drawer-field-label">Case <span class="required-mark">*</span></label><input name="case_title" value="' + escapeHtml(caseData.case_title) + '"><div class="field-error" data-error-for="case_title"></div></div>';
+      html += '<div class="drawer-form-card drawer-form-card-wide"><label class="drawer-field-label">Priority</label><select name="priority">' +
+        ['Low', 'Medium', 'High'].map(function (value) {
+          var selected = (caseData.priority || 'Medium') === value ? ' selected' : '';
+          return '<option value="' + value + '"' + selected + '>' + value + '</option>';
+        }).join('') +
+        '</select></div>';
+      html += '</div>';
+      html += '</section>';
+      html += '<section class="drawer-section">';
+      html += '<div class="drawer-content-stack">';
+      html += '<div class="drawer-form-card"><label class="drawer-field-label">Preconditions</label><textarea name="preconditions" rows="3">' + escapeHtml(caseData.preconditions || '') + '</textarea></div>';
+      html += '<div class="drawer-form-card"><label class="drawer-field-label">Steps <span class="required-mark">*</span></label><textarea name="steps" rows="4">' + escapeHtml(caseData.steps || '') + '</textarea><div class="field-error" data-error-for="steps"></div></div>';
+      html += '<div class="drawer-form-card"><label class="drawer-field-label">Expected Result <span class="required-mark">*</span></label><textarea name="expected_result" rows="3">' + escapeHtml(caseData.expected_result || '') + '</textarea><div class="field-error" data-error-for="expected_result"></div></div>';
+      html += '<div class="drawer-form-card"><label class="drawer-field-label">Remark</label><textarea name="remark" rows="3">' + escapeHtml(caseData.remark || '') + '</textarea></div>';
+      html += '</div>';
+      html += '</section>';
+      previewDetail.innerHTML = html;
+      setDrawerEditMode(true);
+      bindDrawerValidation();
+    }
+
+    window.openPreviewDrawer = async function(caseId) {
+      try {
+        var payload = await window.testcaseApi.requestJson('/api/testcases/' + caseId);
+        activeCase = payload.data || payload;
+        renderPreviewDetail(activeCase);
+        previewDrawer.classList.add('active');
+        previewOverlay.classList.add('active');
+      } catch (error) {
+        window.showToast('載入預覽失敗：' + error.message, 'error');
+      }
+    };
+
+    function closePreviewDrawer() {
+      previewDrawer.classList.remove('active');
+      previewOverlay.classList.remove('active');
+      previewTitle.textContent = '預覽';
+      activeCase = null;
+      setDrawerEditMode(false);
+      previewSaveButton.disabled = false;
+      previewSaveButton.textContent = '保存';
+    }
+
+    closePreviewButton.addEventListener('click', closePreviewDrawer);
+    previewOverlay.addEventListener('click', closePreviewDrawer);
+    previewEditButton.addEventListener('click', function () {
+      if (!activeCase) {
+        return;
+      }
+      renderEditDetail(activeCase);
+    });
+    previewSaveButton.addEventListener('click', async function () {
+      if (!activeCase || !isEditing) {
+        return;
+      }
+
+      previewSaveButton.disabled = true;
+      previewSaveButton.textContent = '保存中...';
+
+      try {
+        var formFields = previewDetail.querySelectorAll('input, textarea, select');
+        var values = {};
+        formFields.forEach(function (field) {
+          values[field.name] = (field.value || '').trim();
+        });
+
+        var hasErrors = drawerRequiredFields.some(function (fieldName) {
+          return !validateDrawerField(fieldName);
+        });
+        if (hasErrors) {
+          throw new Error('請先完成必填欄位。');
+        }
+
+        var moduleId = await window.testcaseApi.resolveModuleId(values.product_name, values.module_name);
+        var payload = {
+          module_id: moduleId,
+          case_title: values.case_title,
+          preconditions: values.preconditions,
+          steps: values.steps,
+          expected_result: values.expected_result,
+          remark: values.remark,
+          priority: values.priority || 'Medium',
+        };
+
+        var result = await window.testcaseApi.requestJson('/api/testcases/' + activeCase.id, {
+          method: 'PUT',
+          body: JSON.stringify(payload),
+        });
+
+        activeCase = result.data || payload;
+        renderPreviewDetail(activeCase);
+        loadCases();
+        window.showToast('TestCase 已更新', 'success', 'top-center');
+      } catch (error) {
+        previewSaveButton.disabled = false;
+        previewSaveButton.textContent = '保存';
+        window.showToast('保存 TestCase 失敗：' + error.message, 'error');
+      }
+    });
+
+    // 防止按ESC鍵關閉
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && createModal.classList.contains('active')) {
+        closeCreateModal();
+        return;
+      }
+      if (e.key === 'Escape' && previewDrawer.classList.contains('active')) {
+        closePreviewDrawer();
+      }
+    });
+
+    loadCases();
+  })();
+</script>
+{% endblock %}

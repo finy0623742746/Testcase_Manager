@@ -1,0 +1,160 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="page-header compact">
+  <div>
+    <h1>{{ '編輯' if case else '新增' }} TestCase</h1>
+  </div>
+</section>
+<form class="form-card" id="testcase-form" data-case-id="{{ case.id if case else '' }}">
+  <div class="field-group">
+    <label>Product/Version</label>
+    <div class="readonly-field">{{ product.name if product else (case.product_name if case else '') }}</div>
+  </div>
+  <div class="field-group">
+    <label>Module <span class="required-mark">*</span></label>
+    <select name="module_id">
+      {% for module in modules %}
+        <option value="{{ module.id }}" {% if case and module.id == case.module_id %}selected{% endif %}>{{ module.name }}</option>
+      {% endfor %}
+    </select>
+    <div class="field-error" data-error-for="module_id"></div>
+  </div>
+  <div class="field-group">
+    <label>Case <span class="required-mark">*</span></label>
+    <input name="case_title" value="{{ case.case_title if case else '' }}" placeholder="輸入測試案例標題">
+    <div class="field-error" data-error-for="case_title"></div>
+  </div>
+  <div class="field-group">
+    <label>Preconditions</label>
+    <textarea name="preconditions" rows="4">{{ case.preconditions if case else '' }}</textarea>
+  </div>
+  <div class="field-group">
+    <label>Step <span class="required-mark">*</span></label>
+    <textarea name="steps" rows="4">{{ case.steps if case else '' }}</textarea>
+    <div class="field-error" data-error-for="steps"></div>
+  </div>
+  <div class="field-group">
+    <label>Expected Result <span class="required-mark">*</span></label>
+    <textarea name="expected_result" rows="4">{{ case.expected_result if case else '' }}</textarea>
+    <div class="field-error" data-error-for="expected_result"></div>
+  </div>
+  <div class="field-group">
+    <label>Priority</label>
+    <select name="priority">
+      {% for value in priorities %}
+        <option value="{{ value }}" {% if (case and case.priority == value) or (not case and value == 'Medium') %}selected{% endif %}>{{ value }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="field-group">
+    <label>Remark</label>
+    <textarea name="remark" rows="3">{{ case.remark if case else '' }}</textarea>
+  </div>
+  <div class="button-row">
+    <button type="submit" id="testcase-submit-button">{{ '保存' if case else '新增' }}</button>
+    <a class="button outline" href="{{ url_for('product_detail', product_id=case.product_id) if case else url_for('testcases') }}">返回 Module & TestCase</a>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/testcase_api.js') }}"></script>
+<script>
+  (function () {
+    var form = document.getElementById('testcase-form');
+    var submitButton = document.getElementById('testcase-submit-button');
+    var caseId = form.getAttribute('data-case-id');
+    var defaultSubmitLabel = caseId ? '保存' : '新增';
+    var requiredFields = ['module_id', 'case_title', 'steps', 'expected_result'];
+
+    function setFieldError(fieldName, message) {
+      var field = form.querySelector('[name="' + fieldName + '"]');
+      var errorNode = form.querySelector('[data-error-for="' + fieldName + '"]');
+      if (!field || !errorNode) {
+        return;
+      }
+      errorNode.textContent = message || '';
+      field.classList.toggle('is-invalid', Boolean(message));
+    }
+
+    function validateField(fieldName) {
+      var field = form.querySelector('[name="' + fieldName + '"]');
+      if (!field) {
+        return true;
+      }
+      var isValid = Boolean((field.value || '').trim());
+      setFieldError(fieldName, isValid ? '' : '請輸入欄位');
+      return isValid;
+    }
+
+    requiredFields.forEach(function (fieldName) {
+      var field = form.querySelector('[name="' + fieldName + '"]');
+      if (!field) {
+        return;
+      }
+      field.addEventListener('blur', function () {
+        validateField(fieldName);
+      });
+      field.addEventListener('input', function () {
+        if ((field.value || '').trim()) {
+          setFieldError(fieldName, '');
+        }
+      });
+    });
+
+    form.addEventListener('submit', async function (event) {
+      event.preventDefault();
+
+      var hasErrors = false;
+      requiredFields.forEach(function (fieldName) {
+        if (!validateField(fieldName)) {
+          hasErrors = true;
+        }
+      });
+      if (hasErrors) {
+        window.showToast('請先完成必填欄位', 'error', 'top-center');
+        return;
+      }
+
+      submitButton.disabled = true;
+      submitButton.textContent = caseId ? '處理中...' : '新增中...';
+
+      try {
+        var formData = new FormData(form);
+        var payload = {
+          module_id: parseInt((formData.get('module_id') || '').trim(), 10),
+          case_title: (formData.get('case_title') || '').trim(),
+          preconditions: (formData.get('preconditions') || '').trim(),
+          steps: (formData.get('steps') || '').trim(),
+          expected_result: (formData.get('expected_result') || '').trim(),
+          remark: (formData.get('remark') || '').trim(),
+          priority: formData.get('priority') || 'Medium',
+        };
+
+        var url = caseId ? '/api/testcases/' + caseId : '/api/testcases';
+        var method = caseId ? 'PUT' : 'POST';
+        var result = await window.testcaseApi.requestJson(url, {
+          method: method,
+          body: JSON.stringify(payload),
+        });
+
+        window.showToast(caseId ? 'TestCase 已更新' : 'TestCase 已建立', 'success', 'top-center');
+        if (caseId) {
+          window.setTimeout(function () {
+            window.location.href = '/testcases/case/' + caseId;
+          }, 500);
+        } else {
+          window.setTimeout(function () {
+            window.location.href = '/testcases';
+          }, 500);
+        }
+      } catch (error) {
+        window.showToast('保存失敗：' + error.message, 'error');
+      } finally {
+        submitButton.disabled = false;
+        submitButton.textContent = defaultSubmitLabel;
+      }
+    });
+  })();
+</script>
+{% endblock %}

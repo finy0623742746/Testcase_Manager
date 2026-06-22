@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-TW">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TestCase 管理系統</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+  <header>
+    <a class="brand" href="{{ url_for('testcases') }}">TestCase 管理系統</a>
+    <form class="header-search" action="{{ url_for('testcases') }}" method="get" role="search">
+      <input
+        type="search"
+        name="q"
+        value="{{ request.args.get('q', '') }}"
+        placeholder="搜尋"
+        aria-label="搜尋"
+      >
+      <button class="button" type="submit">查詢</button>
+    </form>
+    <nav>
+      <a href="{{ url_for('testruns') }}">TestRun</a>
+    </nav>
+  </header>
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <section class="toast-stack" aria-live="polite" aria-atomic="true">
+        {% for category, message in messages %}
+          <div class="toast alert {{ category }}" data-toast>{{ message }}</div>
+        {% endfor %}
+      </section>
+    {% endif %}
+  {% endwith %}
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+  <script>
+    window.showToast = function (message, category, position) {
+      var stack = document.querySelector('.toast-stack');
+      if (!stack) {
+        stack = document.createElement('section');
+        stack.className = 'toast-stack';
+        stack.setAttribute('aria-live', 'polite');
+        stack.setAttribute('aria-atomic', 'true');
+        document.body.appendChild(stack);
+      }
+      stack.classList.toggle('top-center', position === 'top-center');
+
+      var toast = document.createElement('div');
+      toast.className = 'toast alert ' + (category || 'success');
+      toast.setAttribute('data-toast', '');
+      toast.textContent = message;
+      stack.appendChild(toast);
+
+      window.setTimeout(function () {
+        toast.classList.add('is-hiding');
+        window.setTimeout(function () {
+          toast.remove();
+        }, 300);
+      }, 3000);
+    };
+
+    window.setTimeout(function () {
+      document.querySelectorAll('[data-toast]').forEach(function (toast) {
+        toast.classList.add('is-hiding');
+        window.setTimeout(function () {
+          toast.remove();
+        }, 300);
+      });
+    }, 3000);
+  </script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

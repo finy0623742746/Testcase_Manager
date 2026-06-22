@@ -1,0 +1,850 @@
+openapi: 3.0.3
+info:
+  title: TestCase Management API
+  version: 1.0.0
+  description: |
+    TestCase 管理系統 API
+    
+    - 主要前端流程以 Product/Version 為入口，再進入 Module 與 TestCase
+    - 使用 SQLite 資料庫
+    - 支援 JSON 格式資料交換
+    - 提供完整的 CRUD 操作
+servers:
+  - url: http://127.0.0.1:5000
+    description: 本地開發伺服器
+
+tags:
+  - name: Products
+    description: Product/Version 管理
+  - name: Modules
+    description: Product/Version 底下的 Module 管理
+  - name: TestCases
+    description: 測試案例管理
+  - name: TestRuns
+    description: 專案管理
+  - name: System
+    description: 系統控制
+
+paths:
+  # ==================== System ====================
+  /api:
+    get:
+      tags:
+        - System
+      summary: 取得 API 文件頁
+      description: 回傳 API 文件頁面，不影響快取控制功能。
+      responses:
+        '200':
+          description: OK
+
+  /api/cache/clear:
+    post:
+      tags:
+        - System
+      summary: 清除 API 快取
+      description: 更新快取版本，供外部呼叫後重新取得最新 API 文件與資料。
+      responses:
+        '200':
+          description: Cache cleared successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Cache cleared successfully
+                  data:
+                    type: object
+                    properties:
+                      version:
+                        type: integer
+                        example: 1
+                      last_cleared_at:
+                        type: string
+                        format: date-time
+                        example: '2026-05-28T00:00:00+00:00'
+
+  /api/admin/reset:
+    post:
+      tags:
+        - System
+      summary: 重置所有資料與 ID 序列
+      description: |
+        清空所有資料表（products, modules, test_cases, testruns, testrun_test_cases）
+        並重置 ID 序列計數器。
+        
+        ⚠️ **警告**：此操作不可逆轉，所有資料將永久刪除！
+        
+        用途：
+        - 從 GitHub 下載後重新開始
+        - 開發環境重置
+        - 測試環境清理
+      responses:
+        '200':
+          description: 重置成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResetResponse'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ==================== Products ====================
+  /api/products:
+    get:
+      tags:
+        - Products
+      summary: 取得所有 Product/Version 列表
+      operationId: listProducts
+      responses:
+        '200':
+          description: 成功取得產品列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Product'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      tags:
+        - Products
+      summary: 建立新產品
+      operationId: createProduct
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductCreate'
+      responses:
+        '201':
+          description: 產品建立成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/products/{id}:
+    get:
+      tags:
+        - Products
+      summary: 取得特定產品
+      operationId: getProduct
+      parameters:
+        - $ref: '#/components/parameters/ProductId'
+      responses:
+        '200':
+          description: 成功取得產品
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags:
+        - Products
+      summary: 更新產品
+      operationId: updateProduct
+      parameters:
+        - $ref: '#/components/parameters/ProductId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductUpdate'
+      responses:
+        '200':
+          description: 產品更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags:
+        - Products
+      summary: 刪除產品
+      operationId: deleteProduct
+      parameters:
+        - $ref: '#/components/parameters/ProductId'
+      responses:
+        '204':
+          description: 產品刪除成功
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ==================== Modules ====================
+  /api/products/{product_id}/modules:
+    get:
+      tags:
+        - Modules
+      summary: 取得指定 Product/Version 底下的所有模組
+      operationId: listModules
+      parameters:
+        - $ref: '#/components/parameters/ProductId'
+      responses:
+        '200':
+          description: 成功取得模組列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Module'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags:
+        - Modules
+      summary: 建立新模組
+      operationId: createModule
+      parameters:
+        - $ref: '#/components/parameters/ProductId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModuleCreate'
+      responses:
+        '201':
+          description: 模組建立成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Module'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/modules/{id}:
+    get:
+      tags:
+        - Modules
+      summary: 取得特定模組
+      operationId: getModule
+      parameters:
+        - $ref: '#/components/parameters/ModuleId'
+      responses:
+        '200':
+          description: 成功取得模組
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Module'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags:
+        - Modules
+      summary: 更新模組
+      operationId: updateModule
+      parameters:
+        - $ref: '#/components/parameters/ModuleId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModuleUpdate'
+      responses:
+        '200':
+          description: 模組更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Module'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags:
+        - Modules
+      summary: 刪除模組
+      operationId: deleteModule
+      parameters:
+        - $ref: '#/components/parameters/ModuleId'
+      responses:
+        '200':
+          description: 模組刪除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ==================== TestCases ====================
+  /api/testcases:
+    get:
+      tags:
+        - TestCases
+      summary: 取得所有 TestCase（平面列表）
+      operationId: listTestCases
+      responses:
+        '200':
+          description: 成功取得 TestCase 列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestCaseListResponse'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      tags:
+        - TestCases
+      summary: 建立新 TestCase
+      operationId: createTestCase
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TestCaseCreate'
+      responses:
+        '201':
+          description: TestCase 建立成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestCaseItemResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/testcases/{id}:
+    get:
+      tags:
+        - TestCases
+      summary: 取得特定 TestCase
+      operationId: getTestCase
+      parameters:
+        - $ref: '#/components/parameters/TestCaseId'
+      responses:
+        '200':
+          description: 成功取得 TestCase
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestCaseItemResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags:
+        - TestCases
+      summary: 更新 TestCase
+      operationId: updateTestCase
+      parameters:
+        - $ref: '#/components/parameters/TestCaseId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TestCaseUpdate'
+      responses:
+        '200':
+          description: TestCase 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestCaseItemResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags:
+        - TestCases
+      summary: 刪除 TestCase
+      operationId: deleteTestCase
+      parameters:
+        - $ref: '#/components/parameters/TestCaseId'
+      responses:
+        '200':
+          description: TestCase 刪除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ==================== TestRuns ====================
+  /api/testruns:
+    get:
+      tags:
+        - TestRuns
+      summary: 取得所有 TestRun
+      operationId: listTestRuns
+      responses:
+        '200':
+          description: 成功取得專案列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TestRun'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      tags:
+        - TestRuns
+      summary: 建立新 TestRun
+      operationId: createTestRun
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TestRunCreate'
+      responses:
+        '201':
+          description: 專案建立成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestRun'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/testruns/{id}:
+    get:
+      tags:
+        - TestRuns
+      summary: 取得特定 TestRun（含 TestCase 狀態）
+      operationId: getTestRun
+      parameters:
+        - $ref: '#/components/parameters/TestRunId'
+      responses:
+        '200':
+          description: 成功取得專案
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestRunDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags:
+        - TestRuns
+      summary: 更新 TestRun
+      operationId: updateTestRun
+      parameters:
+        - $ref: '#/components/parameters/TestRunId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TestRunUpdate'
+      responses:
+        '200':
+          description: 專案更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestRun'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags:
+        - TestRuns
+      summary: 刪除 TestRun
+      operationId: deleteTestRun
+      parameters:
+        - $ref: '#/components/parameters/TestRunId'
+      responses:
+        '204':
+          description: 專案刪除成功
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/testruns/{testrun_id}/testcases/{test_case_id}/status:
+    put:
+      tags:
+        - TestRuns
+      summary: 更新 TestRun 中 TestCase 的狀態
+      operationId: updateTestRunStatus
+      parameters:
+        - $ref: '#/components/parameters/TestRunId'
+        - $ref: '#/components/parameters/TestCaseId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StatusUpdate'
+      responses:
+        '200':
+          description: 狀態更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestRunTestCase'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  parameters:
+    ProductId:
+      name: id
+      in: path
+      required: true
+      description: 產品 ID
+      schema:
+        type: integer
+        example: 1
+    ModuleId:
+      name: id
+      in: path
+      required: true
+      description: 模組 ID
+      schema:
+        type: integer
+        example: 1
+    TestCaseId:
+      name: id
+      in: path
+      required: true
+      description: TestCase ID
+      schema:
+        type: integer
+        example: 1
+    TestRunId:
+      name: id
+      in: path
+      required: true
+      description: 專案 ID
+      schema:
+        type: integer
+        example: 1
+
+  schemas:
+    # Product
+    Product:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: "產品A"
+        created_at:
+          type: string
+          format: date-time
+          example: "2024-01-01T00:00:00"
+    ProductCreate:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          maxLength: 128
+          example: "產品A"
+    ProductUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 128
+          example: "產品A（新名稱）"
+
+    # Module
+    Module:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        product_id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: "登入模組"
+        created_at:
+          type: string
+          format: date-time
+    ModuleCreate:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          maxLength: 128
+          example: "登入模組"
+    ModuleUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 128
+
+    # TestCase
+    TestCase:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        module_id:
+          type: integer
+          example: 1
+        case_title:
+          type: string
+          example: "驗證登入成功"
+        preconditions:
+          type: string
+          example: "使用者已註冊"
+        steps:
+          type: string
+          example: "1. 輸入帳號\n2. 輸入密碼\n3. 點擊登入"
+        expected_result:
+          type: string
+          example: "成功進入系統"
+        priority:
+          type: string
+          enum: [Low, Medium, High]
+          example: "High"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    MessageResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "Success"
+    TestCaseItemResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "TestCase retrieved successfully"
+        data:
+          $ref: '#/components/schemas/TestCase'
+    TestCaseListResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "TestCases retrieved successfully"
+        count:
+          type: integer
+          example: 3
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TestCase'
+    TestCaseHierarchy:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        modules:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+              name:
+                type: string
+              cases:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    case_title:
+                      type: string
+                    priority:
+                      type: string
+    TestCaseCreate:
+      type: object
+      required:
+        - module_id
+        - case_title
+      properties:
+        module_id:
+          type: integer
+          example: 1
+        case_title:
+          type: string
+          maxLength: 256
+          example: "驗證登入成功"
+        preconditions:
+          type: string
+          example: "使用者已註冊"
+        steps:
+          type: string
+          example: "1. 輸入帳號\n2. 輸入密碼\n3. 點擊登入"
+        expected_result:
+          type: string
+          example: "成功進入系統"
+        priority:
+          type: string
+          enum: [Low, Medium, High]
+          default: "Medium"
+    TestCaseUpdate:
+      type: object
+      properties:
+        module_id:
+          type: integer
+        case_title:
+          type: string
+        preconditions:
+          type: string
+        steps:
+          type: string
+        expected_result:
+          type: string
+        priority:
+          type: string
+          enum: [Low, Medium, High]
+
+    # TestRun
+    TestRun:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: "專案A"
+        description:
+          type: string
+          example: "這是測試專案"
+        created_at:
+          type: string
+          format: date-time
+    TestRunDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+        cases:
+          type: array
+          items:
+            $ref: '#/components/schemas/TestRunTestCase'
+    TestRunTestCase:
+      type: object
+      properties:
+        relation_id:
+          type: integer
+        case_id:
+          type: integer
+        case_title:
+          type: string
+        product_name:
+          type: string
+        module_name:
+          type: string
+        status:
+          type: string
+          enum: [Pending, In Progress, Passed, Failed]
+    TestRunCreate:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          maxLength: 128
+          example: "專案A"
+        description:
+          type: string
+          example: "這是測試專案"
+        test_case_ids:
+          type: array
+          items:
+            type: integer
+          example: [1, 2, 3]
+    TestRunUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+
+    # Status Update
+    StatusUpdate:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum: [Pending, In Progress, Passed, Failed]
+          example: "Passed"
+
+    # Reset Response
+    ResetResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [success, error]
+          example: "success"
+        message:
+          type: string
+          example: "已重置所有資料與 ID 序列"
+        warning:
+          type: string
+          example: "所有資料已清空，ID 序列已重置，系統已重新初始化"
+
+  responses:
+    BadRequest:
+      description: 請求資料無效
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Invalid request data"
+    NotFound:
+      description: 資源不存在
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Resource not found"
+    InternalError:
+      description: 伺服器內部錯誤
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Internal server error"

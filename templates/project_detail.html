@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="page-header">
+  <div>
+    <h1>{{ project.name }}</h1>
+    <p>{{ project.description or '無描述' }}</p>
+  </div>
+  <a class="button outline" href="{{ url_for('testruns') }}">返回專案列表</a>
+</section>
+<div class="panel">
+  <h2>TestCase 狀態</h2>
+  {% if project.cases %}
+    <table>
+      <thead>
+        <tr>
+          <th>Case</th>
+          <th>TestCase</th>
+          <th>Status</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for case in project.cases %}
+          <tr>
+            <td>{{ case.case_title }}</td>
+            <td>{{ case.product_name }} / {{ case.module_name }}</td>
+            <td>{{ case.status }}</td>
+            <td>
+              <form method="post" action="{{ url_for('update_testrun_status', project_id=project.id, test_case_id=case.case_id) }}">
+                <select name="status">
+                  {% for value in statuses %}
+                    <option value="{{ value }}" {% if case.status == value %}selected{% endif %}>{{ value }}</option>
+                  {% endfor %}
+                </select>
+                <button type="submit">更新</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p>此專案尚未指定任何 TestCase。</p>
+  {% endif %}
+</div>
+{% endblock %}
