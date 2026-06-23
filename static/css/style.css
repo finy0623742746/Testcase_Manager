@@ -1143,17 +1143,50 @@ th {
   display: flex;
   justify-content: space-between;
   gap: 1rem;
-  align-items: baseline;
+  align-items: center;
   margin-bottom: 0.85rem;
+}
+.testrun-month-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.7rem;
+  min-width: 0;
 }
 .testrun-month-heading h2 {
   margin: 0;
   font-size: 1.1rem;
 }
-.testrun-month-heading span {
+.testrun-month-title {
+  color: #0f172a;
+}
+.testrun-month-count {
+  flex-shrink: 0;
   color: #64748b;
-  font-size: 0.92rem;
-  font-weight: 700;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+.testrun-action-button,
+.testrun-action-button.button,
+.preview-run-case-button,
+.preview-run-case-button.button {
+  border: 1px solid #2563eb;
+  border-radius: 12px;
+  background: #2563eb;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+}
+.testrun-action-button:hover,
+.testrun-action-button.button:hover,
+.preview-run-case-button:hover,
+.preview-run-case-button.button:hover {
+  border-color: #1d4ed8;
+  background: #1d4ed8;
+  color: #ffffff;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.1);
+}
+.testrun-actions .testrun-action-button {
+  min-height: 38px;
+  padding: 0.55rem 0.85rem;
 }
 .testrun-modal-panel {
   width: min(1180px, calc(100vw - 2rem));
@@ -1253,6 +1286,9 @@ th {
   padding: 0.55rem 0.75rem;
   border-radius: 10px;
 }
+.testrun-case-toolbar .testrun-action-button {
+  border-radius: 12px;
+}
 .testrun-case-list {
   flex: 1;
   overflow-y: auto;
@@ -1289,15 +1325,9 @@ th {
   font-size: 0.85rem;
   overflow-wrap: anywhere;
 }
-.preview-case-button {
-  min-height: 34px;
-  padding: 0.5rem 0.7rem;
-  border-radius: 10px;
-}
 .preview-run-case-button {
   min-height: 38px;
   padding: 0.55rem 0.85rem;
-  border-radius: 10px;
 }
 .testrun-preview-drawer {
   z-index: 1200;
@@ -1431,7 +1461,7 @@ th {
     grid-template-columns: auto 1fr;
   }
   .testrun-case-row .priority-badge,
-  .testrun-case-row .preview-case-button {
+  .testrun-case-row .preview-run-case-button {
     grid-column: 2;
     justify-self: flex-start;
   }

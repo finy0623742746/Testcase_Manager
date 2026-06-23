@@ -21,7 +21,7 @@
 - `database.py`：SQLite 初始化、欄位補齊與重置
 - `models.py`：資料存取與業務邏輯
 - `schema.sql`：資料表結構
-- `openspec.yaml`：API 與資料模型規格
+- `api-spec.yaml`：API 與資料模型規格
 - `templates/`：Jinja2 頁面模板
 - `static/`：CSS 與前端 JavaScript
 - `SYSTEM_MINDMAP.md`：系統功能心智圖，標示已完成與未完成功能
@@ -85,7 +85,7 @@ SECRET_KEY=dev-secret-key
 - 更新 [`規格紀錄.md`](./規格紀錄.md) 時，請使用 `yyyy-mm-dd` 日期標題並置頂新增；每個項目前方請標示影響範圍：`[前端]`、`[後端]` 或 `[前端/後端]`
 - 若當日已存在相同或相關主題的規格紀錄，請將新增項目記錄在該日期主題區塊內；若改動與當日既有主題不相關，請在同一日期下另開新的主題區塊並置於上方
 - 若內容有變動或移除，已記錄的內容也要做相對應調整，避免規格紀錄與實際實作不一致
-- 新增或調整 API 時，請同步更新 [`openspec.yaml`](./openspec.yaml)，讓 `http://127.0.0.1:5000/api` 的 API 文件保持最新
+- 新增或調整 API 時，請同步更新 [`api-spec.yaml`](./api-spec.yaml)，讓 `http://127.0.0.1:5000/api` 的 API 文件保持最新
 
 ## AI 協作說明
 
@@ -93,7 +93,7 @@ SECRET_KEY=dev-secret-key
 
 ## 規格與變更紀錄
 
-- [`openspec.yaml`](./openspec.yaml)：API 與資料模型規格
+- [`api-spec.yaml`](./api-spec.yaml)：API 與資料模型規格
 - [`schema.sql`](./schema.sql)：資料表建立語法
 - [`SYSTEM_MINDMAP.md`](./SYSTEM_MINDMAP.md)：系統功能心智圖與完成狀態
 - [`規格紀錄.md`](./規格紀錄.md)：功能變更與 UI 調整紀錄

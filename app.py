@@ -221,7 +221,7 @@ def api_index_json():
 
 @app.route('/api/spec', methods=['GET'])
 def api_spec():
-    return send_from_directory(app.root_path, 'openspec.yaml', mimetype='application/yaml')
+    return send_from_directory(app.root_path, 'api-spec.yaml', mimetype='application/yaml')
 
 
 @app.route('/api/cache/clear', methods=['POST'])

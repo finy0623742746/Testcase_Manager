@@ -47,11 +47,14 @@ mindmap
       TestRun 管理
         主導覽入口
         瀏覽 TestRun 列表
+        依月份分段顯示 TestRun
+        顯示月份 TestRun 數量
         顯示進度百分比
         顯示狀態統計
-        建立 TestRun
+        以加號入口建立 TestRun
         依 Product/Version 選擇 TestCase
-        預覽 TestCase
+        以 View 按鈕預覽 TestCase
+        勾選 TestCase 不開啟預覽
         更新執行狀態
         查看 TestRun 明細
         產出 HTML Report

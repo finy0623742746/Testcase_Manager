@@ -5,7 +5,6 @@
     <h1>TestRun</h1>
     <p>建立測試執行批次，追蹤 TestCase 狀態與通過率</p>
   </div>
-  <button class="button" id="open-testrun-modal-button" type="button">新增 TestRun</button>
 </section>
 
 {% if grouped_projects %}
@@ -13,8 +12,11 @@
     {% for group in grouped_projects %}
       <section class="panel testrun-month-section">
         <div class="testrun-month-heading">
-          <h2>{{ group.label }}</h2>
-          <span>{{ group.projects|length }} TestRun</span>
+          <div class="testrun-month-title-row">
+            <h2 class="testrun-month-title">{{ group.label }}</h2>
+            <span class="testrun-month-count">{{ group.projects|length }}_TestRun</span>
+          </div>
+          <button class="icon-button product-add-button" type="button" data-open-testrun-modal aria-label="新增 TestRun">＋</button>
         </div>
         <div class="table-wrap">
           <table class="testrun-table">
@@ -48,9 +50,9 @@
                   <td class="text-center">{{ project.pending_count }}</td>
                   <td>{{ project.created_at or 'N/A' }}</td>
                   <td>
-                    <div class="actions compact">
-                      <a class="button outline" href="{{ url_for('testrun_detail', project_id=project.id) }}">Detail</a>
-                      <a class="button outline" href="{{ url_for('testrun_report', project_id=project.id) }}">Report</a>
+                    <div class="actions compact testrun-actions">
+                      <a class="button testrun-action-button" href="{{ url_for('testrun_detail', project_id=project.id) }}">Detail</a>
+                      <a class="button testrun-action-button" href="{{ url_for('testrun_report', project_id=project.id) }}">Report</a>
                     </div>
                   </td>
                 </tr>
@@ -63,7 +65,14 @@
   </div>
 {% else %}
   <div class="panel">
-    <p class="empty-state">尚未建立 TestRun。</p>
+    <div class="testrun-month-heading">
+      <div class="testrun-month-title-row">
+        <h2 class="testrun-month-title">TestRun</h2>
+        <span class="testrun-month-count">0_TestRun</span>
+      </div>
+      <button class="icon-button product-add-button" type="button" data-open-testrun-modal aria-label="新增 TestRun">＋</button>
+    </div>
+    <p class="empty-state">尚未建立 TestRun</p>
   </div>
 {% endif %}
 
@@ -73,7 +82,7 @@
     <div class="modal-header">
       <div>
         <h2 id="testrun-modal-title">新增 TestRun</h2>
-        <p class="modal-subtitle">依 Product/Version、Module 選取要執行的 TestCase。</p>
+        <p class="modal-subtitle">依 Product/Version、Module 選取要執行的 TestCase</p>
       </div>
       <button class="close-button" type="button" data-close-testrun-modal aria-label="關閉">×</button>
     </div>
@@ -113,7 +122,7 @@
                 <strong>選擇 TestCase</strong>
                 <span id="selected-case-count">0 selected</span>
               </div>
-              <button class="button outline" id="select-visible-cases" type="button">選取目前列表</button>
+              <button class="button testrun-action-button" id="select-visible-cases" type="button">選取目前列表</button>
             </div>
             <div class="testrun-case-list" id="testrun-case-list">
               {% set has_cases = namespace(value=false) %}
@@ -128,13 +137,13 @@
                         <span class="testrun-case-path">{{ product.name }} / {{ module.name }}</span>
                       </span>
                       <span class="priority-badge priority-{{ (case.priority or 'Medium')|lower }}">{{ case.priority or 'Medium' }}</span>
-                      <button class="button outline preview-case-button" type="button" data-preview-case="{{ case.id }}">預覽</button>
+                      <button class="button preview-run-case-button" type="button" data-preview-case="{{ case.id }}">View</button>
                     </label>
                   {% endfor %}
                 {% endfor %}
               {% endfor %}
               {% if not has_cases.value %}
-                <div class="empty-state">尚未有任何 TestCase 可選擇。</div>
+                <div class="empty-state">尚未有任何 TestCase 可選擇</div>
               {% endif %}
             </div>
           </section>
@@ -157,7 +166,7 @@
   </div>
   <div class="preview-drawer-content" id="testrun-preview-content">
     <div class="detail-grid">
-      <div class="empty-state">選取或預覽 TestCase 後，這裡會顯示內容。</div>
+      <div class="empty-state">點擊 View 後，這裡會顯示內容</div>
     </div>
   </div>
 </aside>
@@ -177,7 +186,7 @@
     });
 
     var modal = document.getElementById('testrun-modal');
-    var openButton = document.getElementById('open-testrun-modal-button');
+    var openButtons = document.querySelectorAll('[data-open-testrun-modal]');
     var form = document.getElementById('testrun-form');
     var countNode = document.getElementById('selected-case-count');
     var previewOverlay = document.getElementById('testrun-preview-overlay');
@@ -204,7 +213,7 @@
 
     function renderPreview(caseItem) {
       if (!caseItem) {
-        previewContent.innerHTML = '<div class="detail-grid"><div class="empty-state">找不到 TestCase 內容。</div></div>';
+        previewContent.innerHTML = '<div class="detail-grid"><div class="empty-state">找不到 TestCase 內容</div></div>';
         return;
       }
       previewTitle.textContent = caseItem.case_title || '預覽 TestCase';
@@ -265,7 +274,9 @@
       });
     }
 
-    openButton.addEventListener('click', openModal);
+    openButtons.forEach(function (button) {
+      button.addEventListener('click', openModal);
+    });
     document.querySelectorAll('[data-close-testrun-modal]').forEach(function (button) {
       button.addEventListener('click', closeModal);
     });
@@ -298,7 +309,6 @@
     document.getElementById('testrun-case-list').addEventListener('change', function (event) {
       if (event.target.matches('input[type="checkbox"]')) {
         updateSelectedCount();
-        openPreview(casesById[event.target.value]);
       }
     });
 
