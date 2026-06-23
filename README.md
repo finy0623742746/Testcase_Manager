@@ -79,8 +79,6 @@ SECRET_KEY=dev-secret-key
 
 ## 開發中的注意事項
 
-- 這個專案目前仍在調整中，頁面與 API 規格可能持續變動
-- `testcase_manager.db` 是本機 SQLite 資料庫，不建議提交到 GitHub
 - `app.py` 的設定已改為透過 `.env` 載入，避免硬編碼敏感資訊
 - 修改模板或樣式後，如果畫面沒有更新，通常需要重新啟動 Flask 並清除瀏覽器快取
 - 每次完成或調整功能時，請同步更新 [`SYSTEM_MINDMAP.md`](./SYSTEM_MINDMAP.md)，讓功能狀態能作為後續 TestCase 撰寫依據
@@ -88,6 +86,10 @@ SECRET_KEY=dev-secret-key
 - 若當日已存在相同或相關主題的規格紀錄，請將新增項目記錄在該日期主題區塊內；若改動與當日既有主題不相關，請在同一日期下另開新的主題區塊並置於上方
 - 若內容有變動或移除，已記錄的內容也要做相對應調整，避免規格紀錄與實際實作不一致
 - 新增或調整 API 時，請同步更新 [`openspec.yaml`](./openspec.yaml)，讓 `http://127.0.0.1:5000/api` 的 API 文件保持最新
+
+## AI 協作說明
+
+本專案在開發過程中有使用 AI 工具協助撰寫、修改與除錯；實際的架構選擇、功能整合與內容審查由作者完成。
 
 ## 規格與變更紀錄
 
@@ -106,15 +108,6 @@ SECRET_KEY=dev-secret-key
 
 這個專案使用 SQLite，本機資料存在 `testcase_manager.db`。如果你刪掉資料庫檔，系統會重新建立空資料庫。
 
-### 為什麼 GitHub 不應該上傳 `testcase_manager.db`？
+## License
 
-因為那是本機資料檔，通常包含你的測試資料或開發過程中的內容，公開 repo 時應該保留程式與結構，不保留個人資料庫內容。
-
-## 待補充
-
-如果之後你想讓這份 README 更完整，可以再加入：
-
-- API 範例
-- 畫面截圖
-- 部署方式
-- License
+This project is licensed under the MIT License. See the [LICENSE](./LICENSE) file for details.
