@@ -1,48 +1,322 @@
 {% extends 'base.html' %}
 {% block content %}
-<section class="page-header">
+<section class="page-header testrun-header">
   <div>
-    <h1>專案管理</h1>
-    <p>建立專案並引用現有 TestCase，專案可更新狀態。</p>
+    <h1>TestRun</h1>
+    <p>建立測試執行批次，追蹤 TestCase 狀態與通過率</p>
   </div>
+  <button class="button" id="open-testrun-modal-button" type="button">新增 TestRun</button>
 </section>
-<div class="grid-two">
-  <div class="panel">
-    <h2>專案列表</h2>
-    {% if projects %}
-      <ul class="simple-list">
-        {% for project in projects %}
-          <li>
-            <a href="{{ url_for('testrun_detail', project_id=project.id) }}">{{ project.name }}</a>
-            <p>{{ project.description or '無描述' }}</p>
-          </li>
-        {% endfor %}
-      </ul>
-    {% else %}
-      <p>尚未建立專案。</p>
-    {% endif %}
+
+{% if grouped_projects %}
+  <div class="testrun-month-stack">
+    {% for group in grouped_projects %}
+      <section class="panel testrun-month-section">
+        <div class="testrun-month-heading">
+          <h2>{{ group.label }}</h2>
+          <span>{{ group.projects|length }} TestRun</span>
+        </div>
+        <div class="table-wrap">
+          <table class="testrun-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Progress</th>
+                <th class="text-center">Passed/Total</th>
+                <th class="text-center">Failed</th>
+                <th class="text-center">In Progress</th>
+                <th class="text-center">Pending</th>
+                <th>Created_Time</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for project in group.projects %}
+                <tr>
+                  <td><a class="table-link" href="{{ url_for('testrun_detail', project_id=project.id) }}">{{ project.name }}</a></td>
+                  <td>
+                    <div class="progress-cell">
+                      <div class="progress-track" aria-label="Progress {{ project.progress_percent }}%">
+                        <span style="width: {{ project.progress_percent }}%"></span>
+                      </div>
+                      <strong>{{ project.progress_percent }}%</strong>
+                    </div>
+                  </td>
+                  <td class="text-center">{{ project.passed_count }}/{{ project.total_count }}</td>
+                  <td class="text-center">{{ project.failed_count }}</td>
+                  <td class="text-center">{{ project.in_progress_count }}</td>
+                  <td class="text-center">{{ project.pending_count }}</td>
+                  <td>{{ project.created_at or 'N/A' }}</td>
+                  <td>
+                    <div class="actions compact">
+                      <a class="button outline" href="{{ url_for('testrun_detail', project_id=project.id) }}">Detail</a>
+                      <a class="button outline" href="{{ url_for('testrun_report', project_id=project.id) }}">Report</a>
+                    </div>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    {% endfor %}
   </div>
+{% else %}
   <div class="panel">
-    <h2>新增專案</h2>
-    <form method="post" class="form-card">
-      <div class="field-group">
-        <label>TestRun 名稱</label>
-        <input name="project_name" required>
+    <p class="empty-state">尚未建立 TestRun。</p>
+  </div>
+{% endif %}
+
+<div class="modal-shell testrun-modal" id="testrun-modal" aria-hidden="true">
+  <div class="modal-overlay" data-close-testrun-modal></div>
+  <section class="modal-panel testrun-modal-panel" role="dialog" aria-modal="true" aria-labelledby="testrun-modal-title">
+    <div class="modal-header">
+      <div>
+        <h2 id="testrun-modal-title">新增 TestRun</h2>
+        <p class="modal-subtitle">依 Product/Version、Module 選取要執行的 TestCase。</p>
       </div>
-      <div class="field-group">
-        <label>描述</label>
-        <textarea name="description" rows="3"></textarea>
-      </div>
-      <div class="field-group">
-        <label>選擇 TestCase</label>
-        <div class="multiselect">
-          {% for case in test_cases %}
-            <label class="checkbox-inline"><input type="checkbox" name="test_case_ids" value="{{ case.id }}"> {{ case.case_title }}</label>
-          {% endfor %}
+      <button class="close-button" type="button" data-close-testrun-modal aria-label="關閉">×</button>
+    </div>
+    <form method="post" action="{{ url_for('new_testrun') }}" id="testrun-form">
+      <div class="modal-content testrun-modal-content">
+        <div class="testrun-form-grid">
+          <div class="field-group">
+            <label>TestRun 名稱 <span class="required-mark">*</span></label>
+            <input name="project_name" required placeholder="例如：Release 1.2 Regression">
+          </div>
+          <div class="field-group">
+            <label>描述</label>
+            <textarea name="description" rows="3" placeholder="輸入測試範圍或備註"></textarea>
+          </div>
+        </div>
+
+        <div class="testrun-picker">
+          <aside class="testrun-tree" aria-label="Product/Version 與 Module">
+            <button class="tree-filter-button active" type="button" data-filter-product="all" data-filter-module="all">全部 TestCase</button>
+            {% for product in testcase_hierarchy %}
+              <div class="tree-product">
+                <button class="tree-filter-button tree-product-button" type="button" data-filter-product="{{ product.id }}" data-filter-module="all">
+                  {{ product.name }}
+                </button>
+                {% for module in product.modules %}
+                  <button class="tree-filter-button tree-module-button" type="button" data-filter-product="{{ product.id }}" data-filter-module="{{ module.id }}">
+                    {{ module.name }}
+                  </button>
+                {% endfor %}
+              </div>
+            {% endfor %}
+          </aside>
+
+          <section class="testrun-case-panel">
+            <div class="testrun-case-toolbar">
+              <div>
+                <strong>選擇 TestCase</strong>
+                <span id="selected-case-count">0 selected</span>
+              </div>
+              <button class="button outline" id="select-visible-cases" type="button">選取目前列表</button>
+            </div>
+            <div class="testrun-case-list" id="testrun-case-list">
+              {% set has_cases = namespace(value=false) %}
+              {% for product in testcase_hierarchy %}
+                {% for module in product.modules %}
+                  {% for case in module.cases %}
+                    {% set has_cases.value = true %}
+                    <label class="testrun-case-row" data-product-id="{{ product.id }}" data-module-id="{{ module.id }}" data-case-id="{{ case.id }}">
+                      <input type="checkbox" name="test_case_ids" value="{{ case.id }}">
+                      <span class="testrun-case-main">
+                        <span class="testrun-case-title">{{ case.case_title }}</span>
+                        <span class="testrun-case-path">{{ product.name }} / {{ module.name }}</span>
+                      </span>
+                      <span class="priority-badge priority-{{ (case.priority or 'Medium')|lower }}">{{ case.priority or 'Medium' }}</span>
+                      <button class="button outline preview-case-button" type="button" data-preview-case="{{ case.id }}">預覽</button>
+                    </label>
+                  {% endfor %}
+                {% endfor %}
+              {% endfor %}
+              {% if not has_cases.value %}
+                <div class="empty-state">尚未有任何 TestCase 可選擇。</div>
+              {% endif %}
+            </div>
+          </section>
+
         </div>
       </div>
-      <button type="submit">建立專案</button>
+      <div class="modal-footer">
+        <button class="button outline" type="button" data-close-testrun-modal>取消</button>
+        <button class="button" type="submit">保存</button>
+      </div>
     </form>
-  </div>
+  </section>
 </div>
+
+<div class="preview-overlay" id="testrun-preview-overlay"></div>
+<aside class="preview-drawer testrun-preview-drawer" id="testrun-preview-drawer" aria-hidden="true">
+  <div class="preview-drawer-header">
+    <h2 id="testrun-preview-title">預覽 TestCase</h2>
+    <button class="close-button" type="button" id="close-testrun-preview" aria-label="關閉">×</button>
+  </div>
+  <div class="preview-drawer-content" id="testrun-preview-content">
+    <div class="detail-grid">
+      <div class="empty-state">選取或預覽 TestCase 後，這裡會顯示內容。</div>
+    </div>
+  </div>
+</aside>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function () {
+    var hierarchy = {{ testcase_hierarchy|tojson }};
+    var casesById = {};
+    hierarchy.forEach(function (product) {
+      product.modules.forEach(function (module) {
+        module.cases.forEach(function (caseItem) {
+          casesById[String(caseItem.id)] = caseItem;
+        });
+      });
+    });
+
+    var modal = document.getElementById('testrun-modal');
+    var openButton = document.getElementById('open-testrun-modal-button');
+    var form = document.getElementById('testrun-form');
+    var countNode = document.getElementById('selected-case-count');
+    var previewOverlay = document.getElementById('testrun-preview-overlay');
+    var previewDrawer = document.getElementById('testrun-preview-drawer');
+    var previewTitle = document.getElementById('testrun-preview-title');
+    var previewContent = document.getElementById('testrun-preview-content');
+    var closePreviewButton = document.getElementById('close-testrun-preview');
+    var filterButtons = document.querySelectorAll('[data-filter-product]');
+    var caseRows = document.querySelectorAll('.testrun-case-row');
+
+    function displayValue(value) {
+      return value ? value : 'N/A';
+    }
+
+    function escapeHtml(value) {
+      return String(value || '').replace(/[&<>"']/g, function (char) {
+        return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char];
+      });
+    }
+
+    function preserve(value) {
+      return escapeHtml(displayValue(value));
+    }
+
+    function renderPreview(caseItem) {
+      if (!caseItem) {
+        previewContent.innerHTML = '<div class="detail-grid"><div class="empty-state">找不到 TestCase 內容。</div></div>';
+        return;
+      }
+      previewTitle.textContent = caseItem.case_title || '預覽 TestCase';
+      previewContent.innerHTML =
+        '<div class="detail-grid">' +
+          '<div class="drawer-meta-grid">' +
+            '<div class="drawer-meta-card"><span class="drawer-field-label">Product/Version</span><div class="drawer-field-value">' + escapeHtml(caseItem.product_name) + '</div></div>' +
+            '<div class="drawer-meta-card"><span class="drawer-field-label">Module</span><div class="drawer-field-value">' + escapeHtml(caseItem.module_name) + '</div></div>' +
+            '<div class="drawer-meta-card drawer-meta-card-wide"><span class="drawer-field-label">Priority</span><div class="drawer-field-value">' + escapeHtml(caseItem.priority || 'Medium') + '</div></div>' +
+          '</div>' +
+          '<div class="drawer-content-stack">' +
+            '<div class="drawer-content-card"><span class="drawer-field-label">Preconditions</span><div class="drawer-field-value preserve-wrap">' + preserve(caseItem.preconditions) + '</div></div>' +
+            '<div class="drawer-content-card"><span class="drawer-field-label">Step</span><div class="drawer-field-value preserve-wrap">' + preserve(caseItem.steps) + '</div></div>' +
+            '<div class="drawer-content-card"><span class="drawer-field-label">Expected Result</span><div class="drawer-field-value preserve-wrap">' + preserve(caseItem.expected_result) + '</div></div>' +
+            '<div class="drawer-content-card"><span class="drawer-field-label">Remark</span><div class="drawer-field-value preserve-wrap">' + preserve(caseItem.remark) + '</div></div>' +
+          '</div>' +
+        '</div>';
+    }
+
+    function openPreview(caseItem) {
+      renderPreview(caseItem);
+      previewOverlay.classList.add('active');
+      previewDrawer.classList.add('active');
+      previewDrawer.setAttribute('aria-hidden', 'false');
+    }
+
+    function closePreview() {
+      previewOverlay.classList.remove('active');
+      previewDrawer.classList.remove('active');
+      previewDrawer.setAttribute('aria-hidden', 'true');
+    }
+
+    function updateSelectedCount() {
+      var selected = document.querySelectorAll('.testrun-case-row input:checked').length;
+      countNode.textContent = selected + ' selected';
+    }
+
+    function openModal() {
+      modal.classList.add('active');
+      modal.setAttribute('aria-hidden', 'false');
+      var nameInput = form.querySelector('[name="project_name"]');
+      if (nameInput) {
+        nameInput.focus();
+      }
+    }
+
+    function closeModal() {
+      modal.classList.remove('active');
+      modal.setAttribute('aria-hidden', 'true');
+      closePreview();
+    }
+
+    function applyFilter(productId, moduleId) {
+      caseRows.forEach(function (row) {
+        var productMatches = productId === 'all' || row.dataset.productId === productId;
+        var moduleMatches = moduleId === 'all' || row.dataset.moduleId === moduleId;
+        row.classList.toggle('is-hidden', !(productMatches && moduleMatches));
+      });
+    }
+
+    openButton.addEventListener('click', openModal);
+    document.querySelectorAll('[data-close-testrun-modal]').forEach(function (button) {
+      button.addEventListener('click', closeModal);
+    });
+
+    filterButtons.forEach(function (button) {
+      button.addEventListener('click', function () {
+        filterButtons.forEach(function (item) { item.classList.remove('active'); });
+        button.classList.add('active');
+        applyFilter(button.dataset.filterProduct, button.dataset.filterModule);
+      });
+    });
+
+    document.getElementById('select-visible-cases').addEventListener('click', function () {
+      caseRows.forEach(function (row) {
+        if (!row.classList.contains('is-hidden')) {
+          row.querySelector('input').checked = true;
+        }
+      });
+      updateSelectedCount();
+    });
+
+    document.getElementById('testrun-case-list').addEventListener('click', function (event) {
+      var previewButton = event.target.closest('[data-preview-case]');
+      if (previewButton) {
+        event.preventDefault();
+        openPreview(casesById[previewButton.dataset.previewCase]);
+      }
+    });
+
+    document.getElementById('testrun-case-list').addEventListener('change', function (event) {
+      if (event.target.matches('input[type="checkbox"]')) {
+        updateSelectedCount();
+        openPreview(casesById[event.target.value]);
+      }
+    });
+
+    closePreviewButton.addEventListener('click', closePreview);
+    previewOverlay.addEventListener('click', closePreview);
+
+    form.addEventListener('submit', function (event) {
+      var name = form.querySelector('[name="project_name"]').value.trim();
+      if (!name) {
+        event.preventDefault();
+        window.showToast('請輸入 TestRun 名稱', 'error', 'top-center');
+        return;
+      }
+      if (!document.querySelector('.testrun-case-row input:checked')) {
+        event.preventDefault();
+        window.showToast('請至少選擇一個 TestCase', 'error', 'top-center');
+      }
+    });
+  })();
+</script>
 {% endblock %}

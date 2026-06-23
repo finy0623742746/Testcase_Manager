@@ -1,0 +1,73 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="page-header report-header">
+  <div>
+    <div class="product-detail-title-row testrun-title-row">
+      <a class="title-back-button" href="{{ url_for('testruns') }}" aria-label="返回 TestRun"></a>
+      <h1>TestRun Report</h1>
+    </div>
+  </div>
+  <div class="toolbar report-actions">
+    <button class="button" type="button" onclick="window.print()">列印 / 另存 PDF</button>
+  </div>
+</section>
+
+<section class="panel report-cover">
+  <div>
+    <span class="summary-label">TestRun</span>
+    <h2>{{ project.name }}</h2>
+    <p>{{ project.description or '無描述' }}</p>
+  </div>
+  <div class="report-progress">
+    <span class="summary-label">Progress</span>
+    <strong>{{ project.progress_percent }}%</strong>
+    <div class="progress-track">
+      <span style="width: {{ project.progress_percent }}%"></span>
+    </div>
+  </div>
+</section>
+
+<section class="testrun-summary-grid report-summary-grid">
+  <div class="summary-card"><span class="summary-label">Passed/Total</span><strong>{{ project.passed_count }}/{{ project.total_count }}</strong></div>
+  <div class="summary-card"><span class="summary-label">Failed</span><strong>{{ project.failed_count }}</strong></div>
+  <div class="summary-card"><span class="summary-label">In Progress</span><strong>{{ project.in_progress_count }}</strong></div>
+  <div class="summary-card"><span class="summary-label">Pending</span><strong>{{ project.pending_count }}</strong></div>
+  <div class="summary-card"><span class="summary-label">Created</span><strong>{{ project.created_at or 'N/A' }}</strong></div>
+</section>
+
+<section class="panel report-section">
+  <h2>TestCase Results</h2>
+  {% if project.cases %}
+    <div class="report-case-stack">
+      {% for case in project.cases %}
+        <article class="report-case">
+          <header class="report-case-header">
+            <div>
+              <h3>{{ case.case_title }}</h3>
+              <p>{{ case.product_name }} / {{ case.module_name }}</p>
+            </div>
+            <div class="report-case-meta">
+              <span class="priority-badge priority-{{ (case.priority or 'Medium')|lower }}">{{ case.priority or 'Medium' }}</span>
+              <span class="status-badge status-{{ case.status|lower|replace(' ', '-') }}">{{ case.status }}</span>
+            </div>
+          </header>
+          <dl class="report-fields">
+            <dt>Preconditions</dt>
+            <dd class="preserve-wrap">{{ case.preconditions or 'N/A' }}</dd>
+            <dt>Step</dt>
+            <dd class="preserve-wrap">{{ case.steps or 'N/A' }}</dd>
+            <dt>Expected Result</dt>
+            <dd class="preserve-wrap">{{ case.expected_result or 'N/A' }}</dd>
+            <dt>Remark</dt>
+            <dd class="preserve-wrap">{{ case.remark or 'N/A' }}</dd>
+            <dt>Updated</dt>
+            <dd>{{ case.updated_at or 'N/A' }}</dd>
+          </dl>
+        </article>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="empty-state">此 TestRun 尚未指定任何 TestCase。</p>
+  {% endif %}
+</section>
+{% endblock %}

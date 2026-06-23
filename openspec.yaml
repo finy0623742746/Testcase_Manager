@@ -375,6 +375,22 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /api/testcases/hierarchy:
+    get:
+      tags:
+        - TestCases
+      summary: 取得 Product/Version > Module > TestCase 階層資料
+      operationId: listTestCaseHierarchy
+      responses:
+        '200':
+          description: 成功取得 TestCase 階層資料
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestCaseHierarchyResponse'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
   # ==================== TestRuns ====================
   /api/testruns:
     get:
@@ -676,8 +692,40 @@ components:
                       type: integer
                     case_title:
                       type: string
+                    preconditions:
+                      type: string
+                    steps:
+                      type: string
+                    expected_result:
+                      type: string
+                    remark:
+                      type: string
                     priority:
                       type: string
+                    created_at:
+                      type: string
+                      format: date-time
+                    updated_at:
+                      type: string
+                      format: date-time
+                    module_id:
+                      type: integer
+                    module_name:
+                      type: string
+                    product_id:
+                      type: integer
+                    product_name:
+                      type: string
+    TestCaseHierarchyResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "TestCase hierarchy retrieved successfully"
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TestCaseHierarchy'
     TestCaseCreate:
       type: object
       required:
@@ -737,6 +785,24 @@ components:
         created_at:
           type: string
           format: date-time
+        total_count:
+          type: integer
+          example: 10
+        passed_count:
+          type: integer
+          example: 6
+        failed_count:
+          type: integer
+          example: 1
+        in_progress_count:
+          type: integer
+          example: 2
+        pending_count:
+          type: integer
+          example: 1
+        progress_percent:
+          type: integer
+          example: 60
     TestRunDetail:
       type: object
       properties:
@@ -746,6 +812,21 @@ components:
           type: string
         description:
           type: string
+        created_at:
+          type: string
+          format: date-time
+        total_count:
+          type: integer
+        passed_count:
+          type: integer
+        failed_count:
+          type: integer
+        in_progress_count:
+          type: integer
+        pending_count:
+          type: integer
+        progress_percent:
+          type: integer
         cases:
           type: array
           items:
@@ -766,6 +847,20 @@ components:
         status:
           type: string
           enum: [Pending, In Progress, Passed, Failed]
+        priority:
+          type: string
+          enum: [Low, Medium, High]
+        preconditions:
+          type: string
+        steps:
+          type: string
+        expected_result:
+          type: string
+        remark:
+          type: string
+        updated_at:
+          type: string
+          format: date-time
     TestRunCreate:
       type: object
       required:

@@ -130,8 +130,28 @@ def delete_testcase(case_id):
 @app.route('/testruns')
 def testruns():
     all_projects = Project.all()
-    all_test_cases = Project.all_test_cases()
-    return render_template('projects.html', projects=all_projects, test_cases=all_test_cases)
+    grouped_projects = []
+    groups_by_month = {}
+    uncategorized_projects = []
+    for project in all_projects:
+        created_at = project.get('created_at') or ''
+        month_key = created_at[:7] if len(created_at) >= 7 else ''
+        if month_key:
+            if month_key not in groups_by_month:
+                groups_by_month[month_key] = []
+                grouped_projects.append({'label': month_key, 'projects': groups_by_month[month_key]})
+            groups_by_month[month_key].append(project)
+        else:
+            uncategorized_projects.append(project)
+    if uncategorized_projects:
+        grouped_projects.append({'label': '未分類', 'projects': uncategorized_projects})
+    testcase_hierarchy = TestCase.list_hierarchy()
+    return render_template(
+        'projects.html',
+        projects=all_projects,
+        grouped_projects=grouped_projects,
+        testcase_hierarchy=testcase_hierarchy,
+    )
 
 @app.route('/testruns/new', methods=['POST'])
 def new_testrun():
@@ -142,16 +162,24 @@ def new_testrun():
         flash('專案名稱為必填', 'error')
     else:
         Project.create(project_name, description, [int(id_) for id_ in test_case_ids])
-        flash('專案已建立', 'success')
+        flash('TestRun 已建立', 'success')
     return redirect(url_for('testruns'))
 
 @app.route('/testruns/<int:project_id>')
 def testrun_detail(project_id):
     project = Project.get(project_id)
     if not project:
-        flash('找不到指定專案', 'error')
+        flash('找不到指定 TestRun', 'error')
         return redirect(url_for('testruns'))
     return render_template('project_detail.html', project=project, statuses=STATUS_VALUES)
+
+@app.route('/testruns/<int:project_id>/report')
+def testrun_report(project_id):
+    project = Project.get(project_id)
+    if not project:
+        flash('找不到指定 TestRun', 'error')
+        return redirect(url_for('testruns'))
+    return render_template('testrun_report.html', project=project)
 
 @app.route('/testruns/<int:project_id>/status/<int:test_case_id>', methods=['POST'])
 def update_testrun_status(project_id, test_case_id):
@@ -319,6 +347,16 @@ def api_list_testcases():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/testcases/hierarchy', methods=['GET'])
+def api_list_testcase_hierarchy():
+    try:
+        return jsonify({
+            'message': 'TestCase hierarchy retrieved successfully',
+            'data': TestCase.list_hierarchy(),
+        }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/testcases', methods=['POST'])
 def api_create_testcase():
     try:
@@ -402,13 +440,12 @@ def api_create_testrun():
         data = request.get_json()
         if not data or not data.get('name'):
             return jsonify({'error': 'name is required'}), 400
-        Project.create(
+        project_id = Project.create(
             data['name'],
             data.get('description', ''),
             data.get('test_case_ids', [])
         )
-        projects = Project.all()
-        return jsonify(projects[-1] if projects else None), 201
+        return jsonify(Project.get(project_id)), 201
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

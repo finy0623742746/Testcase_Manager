@@ -41,7 +41,20 @@ mindmap
         Product API
         Module API
         TestCase API
+        TestCase Hierarchy API
+        TestRun API
         Admin Reset API
+      TestRun 管理
+        主導覽入口
+        瀏覽 TestRun 列表
+        顯示進度百分比
+        顯示狀態統計
+        建立 TestRun
+        依 Product/Version 選擇 TestCase
+        預覽 TestCase
+        更新執行狀態
+        查看 TestRun 明細
+        產出 HTML Report
       資料庫與設定
         SQLite 資料庫
         testcase_manager.db
@@ -49,13 +62,6 @@ mindmap
         schema.sql
         .env 設定
     未完成功能
-      TestRun 重構
-      TestRun 管理
-        建立 TestRun
-        引用 TestCase
-        更新執行狀態
-        查看 TestRun 明細
-        TestRun API
       匯入匯出
         匯出 TestCase 功能
         匯入 TestCase 功能
