@@ -1,0 +1,71 @@
+pipeline {
+    agent any
+
+    parameters {
+        choice(name: 'BRANCH', choices: ['master', 'new'], description: 'Select branch to deploy')
+        string(name: 'VERSION', defaultValue: '', description: 'Optional release version')
+    }
+
+    options {
+        skipDefaultCheckout(true)
+        timestamps()
+    }
+
+    environment {
+        TARGET_DIR = 'D:\\sam_test\\Testcase_Manager'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout([
+                    $class: 'GitSCM',
+                    branches: [[name: "*/${params.BRANCH}"]],
+                    userRemoteConfigs: [[url: 'https://github.com/finy0623742746/Testcase_Manager.git']]
+                ])
+            }
+        }
+
+        stage('Deploy Backend Files') {
+            steps {
+                powershell '''
+                    $ErrorActionPreference = "Stop"
+
+                    $target = $env:TARGET_DIR
+                    $source = (Get-Location).Path
+
+                    if (-not (Test-Path $target)) {
+                        throw "Target directory does not exist: $target"
+                    }
+
+                    $backendFiles = @(
+                        "app.py",
+                        "database.py",
+                        "models.py",
+                        "requirements.txt",
+                        "schema.sql",
+                        "api-spec.yaml"
+                    )
+
+                    foreach ($file in $backendFiles) {
+                        $sourceFile = Join-Path $source $file
+                        $targetFile = Join-Path $target $file
+
+                        if (Test-Path $sourceFile) {
+                            Copy-Item -Path $sourceFile -Destination $targetFile -Force
+                        }
+                    }
+                '''
+            }
+        }
+    }
+
+    post {
+        success {
+            echo 'Backend deployment completed successfully.'
+        }
+        failure {
+            echo 'Backend deployment failed.'
+        }
+    }
+}
