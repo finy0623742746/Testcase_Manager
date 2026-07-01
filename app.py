@@ -27,18 +27,48 @@ def _find_product_tree(product_id):
             return product
     return None
 
+
+def _group_testrun_cases(cases):
+    grouped = []
+    product_map = {}
+    for case in cases:
+        product_name = case.get('product_name') or 'N/A'
+        module_name = case.get('module_name') or 'N/A'
+        product = product_map.get(product_name)
+        if not product:
+            product = {
+                'product_name': product_name,
+                'modules': [],
+                '_module_map': {},
+            }
+            product_map[product_name] = product
+            grouped.append(product)
+        module = product['_module_map'].get(module_name)
+        if not module:
+            module = {
+                'module_name': module_name,
+                'cases': [],
+            }
+            product['_module_map'][module_name] = module
+            product['modules'].append(module)
+        module['cases'].append(case)
+    for product in grouped:
+        product.pop('_module_map', None)
+    return grouped
+
 @app.route('/')
 def home():
     return redirect(url_for('testcases'))
 
 @app.route('/testcases')
 def testcases():
-    query = request.args.get('q', '').strip()
     products = Product.all()
-    if query:
-        lowered_query = query.lower()
-        products = [product for product in products if lowered_query in product['name'].lower()]
-    return render_template('product_versions.html', products=products, query=query)
+    return render_template('product_versions.html', products=products)
+
+
+@app.route('/testcases/search')
+def testcase_search():
+    return render_template('testcase_search.html')
 
 
 @app.route('/testcases/<int:product_id>')
@@ -53,7 +83,7 @@ def product_detail(product_id):
         product=product,
         modules=product['modules'],
         case_count=case_count,
-        priorities=['Low', 'Medium', 'High'],
+        priorities=['Low', 'Medium', 'High', 'Critical'],
     )
 
 @app.route('/testcases/new', methods=['GET', 'POST'])
@@ -83,7 +113,7 @@ def new_testcase():
                 app.logger.exception('Failed to create testcase')
                 flash(f'TestCase 建立失敗：{error}', 'error')
     products = Product.all()
-    return render_template('testcase_form.html', products=products, priorities=['Low', 'Medium', 'High'])
+    return render_template('testcase_form.html', products=products, priorities=['Low', 'Medium', 'High', 'Critical'])
 
 @app.route('/testcases/case/<int:case_id>')
 def preview_testcase(case_id):
@@ -119,7 +149,7 @@ def edit_testcase(case_id):
                 flash(f'TestCase 更新失敗：{error}', 'error')
     product = Product.get(case['product_id'])
     modules = Module.by_product(case['product_id'])
-    return render_template('testcase_form.html', case=case, product=product, modules=modules, priorities=['Low', 'Medium', 'High'])
+    return render_template('testcase_form.html', case=case, product=product, modules=modules, priorities=['Low', 'Medium', 'High', 'Critical'])
 
 @app.route('/testcases/<int:case_id>/delete', methods=['POST'])
 def delete_testcase(case_id):
@@ -171,7 +201,12 @@ def testrun_detail(project_id):
     if not project:
         flash('找不到指定 TestRun', 'error')
         return redirect(url_for('testruns'))
-    return render_template('project_detail.html', project=project, statuses=STATUS_VALUES)
+    return render_template(
+        'project_detail.html',
+        project=project,
+        statuses=STATUS_VALUES,
+        grouped_cases=_group_testrun_cases(project.get('cases', [])),
+    )
 
 @app.route('/testruns/<int:project_id>/report')
 def testrun_report(project_id):
@@ -337,6 +372,34 @@ def api_delete_module(module_id):
 def api_list_testcases():
     try:
         query = request.args.get('q', '').strip()
+        page_value = request.args.get('page')
+        per_page_value = request.args.get('per_page')
+        if page_value is not None or per_page_value is not None:
+            try:
+                page = int(page_value or '1')
+                per_page = int(per_page_value or '20')
+            except ValueError:
+                return jsonify({'error': 'page and per_page must be integers'}), 400
+            if page < 1:
+                return jsonify({'error': 'page must be a positive integer'}), 400
+            if per_page not in (20, 50, 100):
+                return jsonify({'error': 'per_page must be one of 20, 50, 100'}), 400
+
+            cases, total_items = TestCase.search_page(query, page, per_page)
+            total_pages = (total_items + per_page - 1) // per_page
+            return jsonify({
+                'message': 'TestCases retrieved successfully',
+                'count': len(cases),
+                'query': query,
+                'data': cases,
+                'pagination': {
+                    'page': page,
+                    'per_page': per_page,
+                    'total_items': total_items,
+                    'total_pages': total_pages,
+                },
+            }), 200
+
         cases = TestCase.all(query=query or None)
         return jsonify({
             'message': 'TestCases retrieved successfully',

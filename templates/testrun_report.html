@@ -15,24 +15,24 @@
 <section class="panel report-cover">
   <div>
     <span class="summary-label">TestRun</span>
-    <h2>{{ project.name }}</h2>
-    <p>{{ project.description or '無描述' }}</p>
+    <h2 id="report-run-name">{{ project.name }}</h2>
+    <p id="report-run-description">{{ project.description or '無描述' }}</p>
   </div>
   <div class="report-progress">
     <span class="summary-label">Progress</span>
-    <strong>{{ project.progress_percent }}%</strong>
-    <div class="progress-track">
+    <strong id="report-progress-percent">{{ project.progress_percent }}%</strong>
+    <div class="progress-track" id="report-progress-track">
       <span style="width: {{ project.progress_percent }}%"></span>
     </div>
   </div>
 </section>
 
 <section class="testrun-summary-grid report-summary-grid">
-  <div class="summary-card"><span class="summary-label">Passed/Total</span><strong>{{ project.passed_count }}/{{ project.total_count }}</strong></div>
-  <div class="summary-card"><span class="summary-label">Failed</span><strong>{{ project.failed_count }}</strong></div>
-  <div class="summary-card"><span class="summary-label">In Progress</span><strong>{{ project.in_progress_count }}</strong></div>
-  <div class="summary-card"><span class="summary-label">Pending</span><strong>{{ project.pending_count }}</strong></div>
-  <div class="summary-card"><span class="summary-label">Created</span><strong>{{ project.created_at or 'N/A' }}</strong></div>
+  <div class="summary-card"><span class="summary-label">Passed/Total</span><strong data-report-stat="passed">{{ project.passed_count }}/{{ project.total_count }}</strong></div>
+  <div class="summary-card"><span class="summary-label">Failed</span><strong data-report-stat="failed">{{ project.failed_count }}</strong></div>
+  <div class="summary-card"><span class="summary-label">In Progress</span><strong data-report-stat="in_progress">{{ project.in_progress_count }}</strong></div>
+  <div class="summary-card"><span class="summary-label">Pending</span><strong data-report-stat="pending">{{ project.pending_count }}</strong></div>
+  <div class="summary-card"><span class="summary-label">Created</span><strong data-report-stat="created">{{ project.created_at or 'N/A' }}</strong></div>
 </section>
 
 <section class="panel report-section">
@@ -40,7 +40,7 @@
   {% if project.cases %}
     <div class="report-case-stack">
       {% for case in project.cases %}
-        <article class="report-case">
+        <article class="report-case" data-report-case="{{ case.case_id }}">
           <header class="report-case-header">
             <div>
               <h3>{{ case.case_title }}</h3>
@@ -48,7 +48,7 @@
             </div>
             <div class="report-case-meta">
               <span class="priority-badge priority-{{ (case.priority or 'Medium')|lower }}">{{ case.priority or 'Medium' }}</span>
-              <span class="status-badge status-{{ case.status|lower|replace(' ', '-') }}">{{ case.status }}</span>
+              <span class="status-badge status-{{ case.status|lower|replace(' ', '-') }}" data-report-status>{{ case.status }}</span>
             </div>
           </header>
           <dl class="report-fields">
@@ -61,7 +61,7 @@
             <dt>Remark</dt>
             <dd class="preserve-wrap">{{ case.remark or 'N/A' }}</dd>
             <dt>Updated</dt>
-            <dd>{{ case.updated_at or 'N/A' }}</dd>
+            <dd data-report-updated>{{ case.updated_at or 'N/A' }}</dd>
           </dl>
         </article>
       {% endfor %}
@@ -70,4 +70,34 @@
     <p class="empty-state">此 TestRun 尚未指定任何 TestCase</p>
   {% endif %}
 </section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/testrun_api.js') }}"></script>
+<script>
+  window.testrunApi.get({{ project.id }}).then(function (project) {
+    document.getElementById('report-run-name').textContent = project.name;
+    document.getElementById('report-run-description').textContent = project.description || '無描述';
+    document.getElementById('report-progress-percent').textContent = project.progress_percent + '%';
+    document.querySelector('#report-progress-track span').style.width = project.progress_percent + '%';
+    document.querySelector('[data-report-stat="passed"]').textContent = project.passed_count + '/' + project.total_count;
+    ['failed', 'in_progress', 'pending'].forEach(function (name) {
+      document.querySelector('[data-report-stat="' + name + '"]').textContent = project[name + '_count'];
+    });
+    document.querySelector('[data-report-stat="created"]').textContent = project.created_at || 'N/A';
+    project.cases.forEach(function (caseItem) {
+      var article = document.querySelector('[data-report-case="' + caseItem.case_id + '"]');
+      if (!article) {
+        return;
+      }
+      var status = article.querySelector('[data-report-status]');
+      status.className = 'status-badge status-' + caseItem.status.toLowerCase().replace(/ /g, '-');
+      status.setAttribute('data-report-status', '');
+      status.textContent = caseItem.status;
+      article.querySelector('[data-report-updated]').textContent = caseItem.updated_at || 'N/A';
+    });
+  }).catch(function (error) {
+    window.showToast('載入 TestRun Report 失敗：' + error.message, 'error');
+  });
+</script>
 {% endblock %}
