@@ -46,6 +46,22 @@ def _ensure_sqlite_columns():
             ),
         },
         'testrun_test_cases': {
+            'case_title': ('ALTER TABLE testrun_test_cases ADD COLUMN case_title VARCHAR(256)', None),
+            'product_name': ('ALTER TABLE testrun_test_cases ADD COLUMN product_name VARCHAR(128)', None),
+            'module_name': ('ALTER TABLE testrun_test_cases ADD COLUMN module_name VARCHAR(128)', None),
+            'priority': ('ALTER TABLE testrun_test_cases ADD COLUMN priority VARCHAR(32)', None),
+            'preconditions': ('ALTER TABLE testrun_test_cases ADD COLUMN preconditions TEXT', None),
+            'steps': ('ALTER TABLE testrun_test_cases ADD COLUMN steps TEXT', None),
+            'expected_result': ('ALTER TABLE testrun_test_cases ADD COLUMN expected_result TEXT', None),
+            'remark': ('ALTER TABLE testrun_test_cases ADD COLUMN remark TEXT', None),
+            'test_case_created_at': (
+                'ALTER TABLE testrun_test_cases ADD COLUMN test_case_created_at TIMESTAMP',
+                None,
+            ),
+            'test_case_updated_at': (
+                'ALTER TABLE testrun_test_cases ADD COLUMN test_case_updated_at TIMESTAMP',
+                None,
+            ),
             'status': (
                 "ALTER TABLE testrun_test_cases ADD COLUMN status VARCHAR(32) DEFAULT 'Pending'",
                 "UPDATE testrun_test_cases SET status = 'Pending' WHERE status IS NULL",
@@ -73,6 +89,91 @@ def _ensure_sqlite_columns():
                     conn.execute(backfill_sql)
         conn.commit()
     finally:
+        conn.close()
+
+
+def _migrate_testrun_testcase_snapshots():
+    """回填 TestRun 快照並移除來源 TestCase 的級聯刪除外鍵。"""
+    conn = get_connection()
+    snapshot_sources = {
+        'case_title': 't.case_title',
+        'product_name': 'p.name',
+        'module_name': 'm.name',
+        'priority': 't.priority',
+        'preconditions': 't.preconditions',
+        'steps': 't.steps',
+        'expected_result': 't.expected_result',
+        'remark': 't.remark',
+        'test_case_created_at': 't.created_at',
+        'test_case_updated_at': 't.updated_at',
+    }
+    try:
+        for column_name, source_expression in snapshot_sources.items():
+            conn.execute(
+                f'''UPDATE testrun_test_cases
+                    SET {column_name} = (
+                        SELECT {source_expression}
+                        FROM test_cases t
+                        JOIN modules m ON t.module_id = m.id
+                        JOIN products p ON m.product_id = p.id
+                        WHERE t.id = testrun_test_cases.test_case_id
+                    )
+                    WHERE {column_name} IS NULL'''
+            )
+        conn.commit()
+
+        source_foreign_key_exists = any(
+            row[2] == 'test_cases'
+            for row in conn.execute('PRAGMA foreign_key_list(testrun_test_cases)').fetchall()
+        )
+        if not source_foreign_key_exists:
+            return
+
+        conn.execute('PRAGMA foreign_keys = OFF')
+        conn.execute('BEGIN')
+        conn.execute('DROP TABLE IF EXISTS testrun_test_cases_snapshot_migration')
+        conn.execute(
+            '''CREATE TABLE testrun_test_cases_snapshot_migration (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id INTEGER NOT NULL,
+                test_case_id INTEGER NOT NULL,
+                case_title VARCHAR(256),
+                product_name VARCHAR(128),
+                module_name VARCHAR(128),
+                priority VARCHAR(32),
+                preconditions TEXT,
+                steps TEXT,
+                expected_result TEXT,
+                remark TEXT,
+                test_case_created_at TIMESTAMP,
+                test_case_updated_at TIMESTAMP,
+                status VARCHAR(32) DEFAULT 'Pending',
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (project_id) REFERENCES testruns(id) ON DELETE CASCADE,
+                UNIQUE(project_id, test_case_id)
+            )'''
+        )
+        conn.execute(
+            '''INSERT INTO testrun_test_cases_snapshot_migration (
+                id, project_id, test_case_id, case_title, product_name, module_name,
+                priority, preconditions, steps, expected_result, remark,
+                test_case_created_at, test_case_updated_at, status, updated_at
+            )
+            SELECT id, project_id, test_case_id, case_title, product_name, module_name,
+                   priority, preconditions, steps, expected_result, remark,
+                   test_case_created_at, test_case_updated_at, status, updated_at
+            FROM testrun_test_cases'''
+        )
+        conn.execute('DROP TABLE testrun_test_cases')
+        conn.execute(
+            'ALTER TABLE testrun_test_cases_snapshot_migration RENAME TO testrun_test_cases'
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.execute('PRAGMA foreign_keys = ON')
         conn.close()
 
 
@@ -133,10 +234,19 @@ def initialize_schema():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             project_id INTEGER NOT NULL,
             test_case_id INTEGER NOT NULL,
+            case_title VARCHAR(256),
+            product_name VARCHAR(128),
+            module_name VARCHAR(128),
+            priority VARCHAR(32),
+            preconditions TEXT,
+            steps TEXT,
+            expected_result TEXT,
+            remark TEXT,
+            test_case_created_at TIMESTAMP,
+            test_case_updated_at TIMESTAMP,
             status VARCHAR(32) DEFAULT 'Pending',
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (project_id) REFERENCES testruns(id) ON DELETE CASCADE,
-            FOREIGN KEY (test_case_id) REFERENCES test_cases(id) ON DELETE CASCADE,
             UNIQUE(project_id, test_case_id)
         )'''
     ]
@@ -150,6 +260,7 @@ def initialize_schema():
                 except Exception:
                     continue
         _ensure_sqlite_columns()
+        _migrate_testrun_testcase_snapshots()
     except Exception as error:
         print('Warning: 無法初始化資料庫', error)
 

@@ -24,35 +24,39 @@
               <tr>
                 <th>Name</th>
                 <th>Progress</th>
-                <th class="text-center">Passed/Total</th>
-                <th class="text-center">Failed</th>
-                <th class="text-center">In Progress</th>
-                <th class="text-center">Pending</th>
-                <th>Created_Time</th>
+                <th>Pass Rate</th>
+                <th class="text-center">Created_Time</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {% for project in group.projects %}
-                <tr>
+                <tr data-testrun-id="{{ project.id }}">
                   <td><a class="table-link" href="{{ url_for('testrun_detail', project_id=project.id) }}">{{ project.name }}</a></td>
                   <td>
                     <div class="progress-cell">
-                      <div class="progress-track" aria-label="Progress {{ project.progress_percent }}%">
+                      <div class="progress-track" data-run-progress-track aria-label="Progress {{ project.progress_percent }}%">
                         <span style="width: {{ project.progress_percent }}%"></span>
                       </div>
-                      <strong>{{ project.progress_percent }}%</strong>
+                      <strong data-run-progress>{{ project.progress_percent }}%</strong>
                     </div>
                   </td>
-                  <td class="text-center">{{ project.passed_count }}/{{ project.total_count }}</td>
-                  <td class="text-center">{{ project.failed_count }}</td>
-                  <td class="text-center">{{ project.in_progress_count }}</td>
-                  <td class="text-center">{{ project.pending_count }}</td>
-                  <td>{{ project.created_at or 'N/A' }}</td>
+                  <td>
+                    <div class="progress-cell{% if project.pass_rate_percent is none %} progress-cell-empty{% endif %}" data-run-pass-rate-cell>
+                      {% if project.pass_rate_percent is not none %}
+                        <div class="progress-track" data-run-pass-rate-track aria-label="Pass Rate {{ project.pass_rate_percent }}%">
+                          <span style="width: {{ project.pass_rate_percent }}%"></span>
+                        </div>
+                      {% endif %}
+                      <strong data-run-pass-rate>{{ project.pass_rate_percent if project.pass_rate_percent is not none else 'N/A' }}{% if project.pass_rate_percent is not none %}%{% endif %}</strong>
+                    </div>
+                  </td>
+                  <td class="text-center">{{ project.created_at[:10] if project.created_at else 'N/A' }}</td>
                   <td>
                     <div class="actions compact testrun-actions">
                       <a class="button testrun-action-button" href="{{ url_for('testrun_detail', project_id=project.id) }}">Detail</a>
                       <a class="button testrun-action-button" href="{{ url_for('testrun_report', project_id=project.id) }}">Report</a>
+                      <button class="button testrun-action-button testrun-action-danger" type="button" data-delete-testrun="{{ project.id }}" data-testrun-name="{{ project.name }}">Delete</button>
                     </div>
                   </td>
                 </tr>
@@ -86,7 +90,7 @@
       </div>
       <button class="close-button" type="button" data-close-testrun-modal aria-label="關閉">×</button>
     </div>
-    <form method="post" action="{{ url_for('new_testrun') }}" id="testrun-form">
+    <form method="post" action="{{ url_for('new_testrun') }}" id="testrun-form" data-create-api="{{ url_for('api_create_testrun') }}">
       <div class="modal-content testrun-modal-content">
         <div class="testrun-form-grid">
           <div class="field-group">
@@ -173,6 +177,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/testrun_api.js') }}"></script>
 <script>
   (function () {
     var hierarchy = {{ testcase_hierarchy|tojson }};
@@ -196,6 +201,14 @@
     var closePreviewButton = document.getElementById('close-testrun-preview');
     var filterButtons = document.querySelectorAll('[data-filter-product]');
     var caseRows = document.querySelectorAll('.testrun-case-row');
+    var submitButton = form.querySelector('button[type="submit"]');
+    var testrunTable = document.querySelector('.testrun-table');
+
+    var savedMessage = window.sessionStorage.getItem('testrun-message');
+    if (savedMessage) {
+      window.sessionStorage.removeItem('testrun-message');
+      window.showToast(savedMessage, 'success', 'top-center');
+    }
 
     function displayValue(value) {
       return value ? value : 'N/A';
@@ -251,6 +264,57 @@
       countNode.textContent = selected + ' selected';
     }
 
+    function readJson(response) {
+      return response.json().catch(function () {
+        return {};
+      }).then(function (payload) {
+        if (!response.ok) {
+          throw new Error(payload.error || '請求失敗');
+        }
+        return payload;
+      });
+    }
+
+    function hydrateTestRunRows() {
+      window.testrunApi.list().then(function (projects) {
+        projects.forEach(function (project) {
+          var row = document.querySelector('[data-testrun-id="' + project.id + '"]');
+          if (!row) {
+            return;
+          }
+          var progressTrack = row.querySelector('[data-run-progress-track]');
+          progressTrack.setAttribute('aria-label', 'Progress ' + project.progress_percent + '%');
+          progressTrack.querySelector('span').style.width = project.progress_percent + '%';
+          row.querySelector('[data-run-progress]').textContent = project.progress_percent + '%';
+
+          var passCell = row.querySelector('[data-run-pass-rate-cell]');
+          var passValue = row.querySelector('[data-run-pass-rate]');
+          var passTrack = row.querySelector('[data-run-pass-rate-track]');
+          if (project.pass_rate_percent === null || project.pass_rate_percent === undefined) {
+            if (passTrack) {
+              passTrack.remove();
+            }
+            passCell.classList.add('progress-cell-empty');
+            passValue.textContent = 'N/A';
+            return;
+          }
+          if (!passTrack) {
+            passTrack = document.createElement('div');
+            passTrack.className = 'progress-track';
+            passTrack.setAttribute('data-run-pass-rate-track', '');
+            passTrack.appendChild(document.createElement('span'));
+            passCell.insertBefore(passTrack, passValue);
+          }
+          passCell.classList.remove('progress-cell-empty');
+          passTrack.setAttribute('aria-label', 'Pass Rate ' + project.pass_rate_percent + '%');
+          passTrack.querySelector('span').style.width = project.pass_rate_percent + '%';
+          passValue.textContent = project.pass_rate_percent + '%';
+        });
+      }).catch(function (error) {
+        window.showToast('載入 TestRun 失敗：' + error.message, 'error');
+      });
+    }
+
     function openModal() {
       modal.classList.add('active');
       modal.setAttribute('aria-hidden', 'false');
@@ -272,6 +336,20 @@
         var moduleMatches = moduleId === 'all' || row.dataset.moduleId === moduleId;
         row.classList.toggle('is-hidden', !(productMatches && moduleMatches));
       });
+    }
+
+    function deleteTestrun(testrunId, testrunName) {
+      if (!window.confirm('確定刪除 TestRun「' + (testrunName || '未命名') + '」？')) {
+        return;
+      }
+      window.testrunApi.delete(testrunId)
+        .then(function () {
+          window.sessionStorage.setItem('testrun-message', 'TestRun 已刪除');
+          window.location.reload();
+        })
+        .catch(function (error) {
+          window.showToast('刪除 TestRun 失敗：' + error.message, 'error', 'top-center');
+        });
     }
 
     openButtons.forEach(function (button) {
@@ -312,6 +390,16 @@
       }
     });
 
+    if (testrunTable) {
+      testrunTable.addEventListener('click', function (event) {
+        var deleteButton = event.target.closest('[data-delete-testrun]');
+        if (!deleteButton) {
+          return;
+        }
+        deleteTestrun(deleteButton.getAttribute('data-delete-testrun'), deleteButton.getAttribute('data-testrun-name'));
+      });
+    }
+
     closePreviewButton.addEventListener('click', closePreview);
     previewOverlay.addEventListener('click', closePreview);
 
@@ -325,8 +413,34 @@
       if (!document.querySelector('.testrun-case-row input:checked')) {
         event.preventDefault();
         window.showToast('請至少選擇一個 TestCase', 'error', 'top-center');
+        return;
       }
+
+      event.preventDefault();
+      var selectedCaseIds = Array.from(form.querySelectorAll('input[name="test_case_ids"]:checked')).map(function (input) {
+        return Number(input.value);
+      });
+      var originalButtonText = submitButton.textContent;
+      submitButton.disabled = true;
+      submitButton.textContent = '保存中...';
+
+      window.testrunApi.create({
+          name: name,
+          description: form.querySelector('[name="description"]').value.trim(),
+          test_case_ids: selectedCaseIds
+        })
+        .then(function () {
+          window.sessionStorage.setItem('testrun-message', 'TestRun 已建立');
+          window.location.reload();
+        })
+        .catch(function (error) {
+          window.showToast('建立 TestRun 失敗：' + error.message, 'error', 'top-center');
+          submitButton.disabled = false;
+          submitButton.textContent = originalButtonText;
+        });
     });
+
+    hydrateTestRunRows();
   })();
 </script>
 {% endblock %}

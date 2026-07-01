@@ -422,7 +422,7 @@
       html += '<div class="drawer-form-card"><label class="drawer-field-label">Module <span class="required-mark">*</span></label><input name="module_name" value="' + escapeHtml(caseData.module_name) + '"><div class="field-error" data-error-for="module_name"></div></div>';
       html += '<div class="drawer-form-card drawer-form-card-wide"><label class="drawer-field-label">Case <span class="required-mark">*</span></label><input name="case_title" value="' + escapeHtml(caseData.case_title) + '"><div class="field-error" data-error-for="case_title"></div></div>';
       html += '<div class="drawer-form-card drawer-form-card-wide"><label class="drawer-field-label">Priority</label><select name="priority">' +
-        ['Low', 'Medium', 'High'].map(function (value) {
+        ['Low', 'Medium', 'High', 'Critical'].map(function (value) {
           var selected = (caseData.priority || 'Medium') === value ? ' selected' : '';
           return '<option value="' + value + '"' + selected + '>' + value + '</option>';
         }).join('') +

@@ -1,0 +1,388 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="page-header">
+  <div>
+    <h1>TestCase Search</h1>
+    <p id="search-summary">載入中...</p>
+  </div>
+</section>
+
+<section class="panel testcase-search-panel">
+  <div class="table-wrap">
+    <table class="cases-table search-results-table">
+      <thead>
+        <tr>
+          <th>Case</th>
+          <th>Location</th>
+          <th>Priority</th>
+          <th>Update</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody id="search-results">
+        <tr><td colspan="5" class="empty-state">載入中...</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="search-pagination-bar" id="pagination-bar" hidden>
+    <nav class="pagination" id="pagination" aria-label="TestCase 分頁"></nav>
+    <label class="page-size-control">
+      <span>每頁顯示</span>
+      <select id="page-size">
+        <option value="20">20/page</option>
+        <option value="50">50/page</option>
+        <option value="100">100/page</option>
+      </select>
+    </label>
+  </div>
+</section>
+
+<div id="preview-drawer" class="preview-drawer" aria-hidden="true">
+  <div class="preview-drawer-header">
+    <h2 id="preview-title">View TestCase</h2>
+    <button id="close-preview-button" class="close-button" type="button" aria-label="關閉">✕</button>
+  </div>
+  <div class="preview-drawer-content">
+    <div class="detail-grid" id="preview-detail">
+      <div class="empty-state">載入中...</div>
+    </div>
+    <div class="drawer-actions">
+      <button id="preview-edit-button" class="button" type="button">Update</button>
+      <button id="preview-save-button" class="button outline is-hidden" type="button">Save</button>
+    </div>
+  </div>
+</div>
+<div id="preview-overlay" class="preview-overlay"></div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/testcase_api.js') }}"></script>
+<script>
+  (function () {
+    var resultsBody = document.getElementById('search-results');
+    var summary = document.getElementById('search-summary');
+    var paginationBar = document.getElementById('pagination-bar');
+    var pagination = document.getElementById('pagination');
+    var pageSize = document.getElementById('page-size');
+    var previewDrawer = document.getElementById('preview-drawer');
+    var previewOverlay = document.getElementById('preview-overlay');
+    var previewTitle = document.getElementById('preview-title');
+    var previewDetail = document.getElementById('preview-detail');
+    var closePreviewButton = document.getElementById('close-preview-button');
+    var previewEditButton = document.getElementById('preview-edit-button');
+    var previewSaveButton = document.getElementById('preview-save-button');
+    var params = new URLSearchParams(window.location.search);
+    var query = (params.get('q') || '').trim();
+    var page = positiveInteger(params.get('page'), 1);
+    var perPage = [20, 50, 100].includes(Number(params.get('per_page')))
+      ? Number(params.get('per_page'))
+      : 20;
+    var lastPagination = null;
+    var activeCase = null;
+    var activeModules = [];
+
+    pageSize.value = String(perPage);
+
+    function positiveInteger(value, fallback) {
+      var number = Number(value);
+      return Number.isInteger(number) && number > 0 ? number : fallback;
+    }
+
+    function escapeHtml(value) {
+      return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function displayValue(value) {
+      return String(value == null ? '' : value).trim() || 'N/A';
+    }
+
+    function formatDate(value) {
+      return value ? String(value).slice(0, 10) : 'N/A';
+    }
+
+    function priorityBadge(value) {
+      var priority = displayValue(value || 'Medium');
+      return '<span class="priority-badge priority-' + priority.toLowerCase() + '">' +
+        escapeHtml(priority) + '</span>';
+    }
+
+    function resultRow(item) {
+      var location = displayValue(item.product_name) + ' › ' + displayValue(item.module_name);
+      return '<tr data-case-id="' + item.id + '">' +
+        '<td>' + escapeHtml(displayValue(item.case_title)) + '</td>' +
+        '<td class="case-location">' + escapeHtml(location) + '</td>' +
+        '<td>' + priorityBadge(item.priority) + '</td>' +
+        '<td>' + escapeHtml(formatDate(item.updated_at || item.created_at)) + '</td>' +
+        '<td><div class="actions compact">' +
+          '<button class="button outline" type="button" data-view-case="' + item.id + '">View</button>' +
+          '<button class="button outline" type="button" data-update-case="' + item.id + '">Update</button>' +
+          '<button class="button danger" type="button" data-delete-case="' + item.id + '">Delete</button>' +
+        '</div></td></tr>';
+    }
+
+    function updateUrl(nextPage, nextPerPage) {
+      var next = new URLSearchParams();
+      if (query) {
+        next.set('q', query);
+      }
+      next.set('page', String(nextPage));
+      next.set('per_page', String(nextPerPage));
+      window.history.pushState({}, '', '/testcases/search?' + next.toString());
+      page = nextPage;
+      perPage = nextPerPage;
+    }
+
+    function pageButton(label, targetPage, disabled, current) {
+      return '<button class="pagination-button' + (current ? ' active' : '') +
+        '" type="button" data-page="' + targetPage + '"' +
+        (disabled ? ' disabled' : '') +
+        (current ? ' aria-current="page"' : '') + '>' + label + '</button>';
+    }
+
+    function renderPagination(meta) {
+      paginationBar.hidden = false;
+      if (!meta.total_pages) {
+        pagination.innerHTML = pageButton('上一頁', 1, true, false) +
+          pageButton('下一頁', 1, true, false);
+        return;
+      }
+      var groupStart = Math.floor((meta.page - 1) / 5) * 5 + 1;
+      var groupEnd = Math.min(groupStart + 4, meta.total_pages);
+      var html = pageButton('上一頁', meta.page - 1, meta.page <= 1, false);
+      if (groupStart > 1) {
+        html += '<span class="pagination-ellipsis" aria-hidden="true">…</span>';
+      }
+      for (var number = groupStart; number <= groupEnd; number += 1) {
+        html += pageButton(String(number), number, false, number === meta.page);
+      }
+      if (groupEnd < meta.total_pages) {
+        html += '<span class="pagination-ellipsis" aria-hidden="true">…</span>';
+      }
+      html += pageButton('下一頁', meta.page + 1, meta.page >= meta.total_pages, false);
+      pagination.innerHTML = html;
+    }
+
+    async function loadResults() {
+      resultsBody.innerHTML = '<tr><td colspan="5" class="empty-state">載入中...</td></tr>';
+      try {
+        var apiParams = new URLSearchParams({
+          page: String(page),
+          per_page: String(perPage)
+        });
+        if (query) {
+          apiParams.set('q', query);
+        }
+        var payload = await window.testcaseApi.requestJson('/api/testcases?' + apiParams.toString());
+        var meta = payload.pagination;
+        meta.count = payload.count;
+        if (meta.total_pages && page > meta.total_pages) {
+          updateUrl(meta.total_pages, perPage);
+          return loadResults();
+        }
+        lastPagination = meta;
+        var cases = payload.data || [];
+        summary.textContent = query
+          ? '「' + query + '」共 ' + meta.total_items + ' 筆結果'
+          : '全部 TestCase，共 ' + meta.total_items + ' 筆';
+        resultsBody.innerHTML = cases.length
+          ? cases.map(resultRow).join('')
+          : '<tr><td colspan="5" class="empty-state">查無符合的 TestCase</td></tr>';
+        renderPagination(meta);
+      } catch (error) {
+        console.error('[TestCase Search] Failed to load results', error);
+        summary.textContent = '查詢失敗';
+        resultsBody.innerHTML = '<tr><td colspan="5" class="empty-state">載入失敗：' +
+          escapeHtml(error.message) + '</td></tr>';
+        paginationBar.hidden = true;
+      }
+    }
+
+    function withLineBreaks(value) {
+      return escapeHtml(displayValue(value)).replace(/\r?\n/g, '<br>');
+    }
+
+    function moduleOptions(selectedId) {
+      return activeModules.map(function (moduleItem) {
+        return '<option value="' + moduleItem.id + '"' +
+          (Number(moduleItem.id) === Number(selectedId) ? ' selected' : '') + '>' +
+          escapeHtml(moduleItem.name) + '</option>';
+      }).join('');
+    }
+
+    function renderPreview(item) {
+      previewTitle.textContent = item.case_title || 'View TestCase';
+      previewDetail.innerHTML =
+        '<section class="drawer-section"><div class="drawer-meta-grid">' +
+          '<div class="drawer-meta-card"><div class="drawer-field-label">Product/Version</div><div class="drawer-field-value">' + escapeHtml(displayValue(item.product_name)) + '</div></div>' +
+          '<div class="drawer-meta-card"><div class="drawer-field-label">Module</div><div class="drawer-field-value">' + escapeHtml(displayValue(item.module_name)) + '</div></div>' +
+          '<div class="drawer-meta-card drawer-meta-card-wide"><div class="drawer-field-label">Priority</div><div class="drawer-field-value">' + escapeHtml(displayValue(item.priority || 'Medium')) + '</div></div>' +
+        '</div></section>' +
+        '<section class="drawer-section"><div class="drawer-content-stack">' +
+          '<div class="drawer-content-card"><div class="drawer-field-label">Preconditions</div><div class="drawer-field-value preserve-wrap">' + withLineBreaks(item.preconditions) + '</div></div>' +
+          '<div class="drawer-content-card"><div class="drawer-field-label">Steps</div><div class="drawer-field-value preserve-wrap">' + withLineBreaks(item.steps) + '</div></div>' +
+          '<div class="drawer-content-card"><div class="drawer-field-label">Expected Result</div><div class="drawer-field-value preserve-wrap">' + withLineBreaks(item.expected_result) + '</div></div>' +
+          '<div class="drawer-content-card"><div class="drawer-field-label">Remark</div><div class="drawer-field-value preserve-wrap">' + withLineBreaks(item.remark) + '</div></div>' +
+        '</div></section>';
+      previewEditButton.classList.remove('is-hidden');
+      previewSaveButton.classList.add('is-hidden');
+    }
+
+    function renderEdit(item) {
+      previewTitle.textContent = 'Update TestCase';
+      previewDetail.innerHTML =
+        '<section class="drawer-section"><div class="drawer-form-grid">' +
+          '<div class="drawer-form-card drawer-form-card-wide"><label class="drawer-field-label">Module</label><select name="module_id">' + moduleOptions(item.module_id) + '</select></div>' +
+          '<div class="drawer-form-card drawer-form-card-wide"><label class="drawer-field-label">Case <span class="required-mark">*</span></label><input name="case_title" value="' + escapeHtml(item.case_title || '') + '"><div class="field-error" data-error-for="case_title"></div></div>' +
+          '<div class="drawer-form-card drawer-form-card-wide"><label class="drawer-field-label">Priority</label><select name="priority">' +
+            ['Low', 'Medium', 'High', 'Critical'].map(function (priority) {
+              return '<option value="' + priority + '"' + ((item.priority || 'Medium') === priority ? ' selected' : '') + '>' + priority + '</option>';
+            }).join('') +
+          '</select></div>' +
+        '</div></section>' +
+        '<section class="drawer-section"><div class="drawer-content-stack">' +
+          '<div class="drawer-form-card"><label class="drawer-field-label">Preconditions</label><textarea name="preconditions" rows="3">' + escapeHtml(item.preconditions || '') + '</textarea></div>' +
+          '<div class="drawer-form-card"><label class="drawer-field-label">Steps</label><textarea name="steps" rows="4">' + escapeHtml(item.steps || '') + '</textarea></div>' +
+          '<div class="drawer-form-card"><label class="drawer-field-label">Expected Result</label><textarea name="expected_result" rows="3">' + escapeHtml(item.expected_result || '') + '</textarea></div>' +
+          '<div class="drawer-form-card"><label class="drawer-field-label">Remark</label><textarea name="remark" rows="3">' + escapeHtml(item.remark || '') + '</textarea></div>' +
+        '</div></section>';
+      previewEditButton.classList.add('is-hidden');
+      previewSaveButton.classList.remove('is-hidden');
+      previewSaveButton.disabled = false;
+      previewSaveButton.textContent = 'Save';
+    }
+
+    async function openPreview(caseId, editImmediately) {
+      previewDrawer.classList.add('active');
+      previewOverlay.classList.add('active');
+      previewDrawer.setAttribute('aria-hidden', 'false');
+      previewDetail.innerHTML = '<div class="empty-state">載入中...</div>';
+      try {
+        var payload = await window.testcaseApi.requestJson('/api/testcases/' + caseId);
+        activeCase = payload.data;
+        var modulesPayload = await window.testcaseApi.requestJson(
+          '/api/products/' + activeCase.product_id + '/modules'
+        );
+        activeModules = modulesPayload.data || modulesPayload || [];
+        if (editImmediately) {
+          renderEdit(activeCase);
+        } else {
+          renderPreview(activeCase);
+        }
+      } catch (error) {
+        console.error('[TestCase Search] Failed to load preview', error);
+        previewDetail.innerHTML = '<div class="empty-state">載入失敗：' +
+          escapeHtml(error.message) + '</div>';
+      }
+    }
+
+    function closePreview() {
+      activeCase = null;
+      activeModules = [];
+      previewDrawer.classList.remove('active');
+      previewOverlay.classList.remove('active');
+      previewDrawer.setAttribute('aria-hidden', 'true');
+    }
+
+    resultsBody.addEventListener('click', async function (event) {
+      var viewButton = event.target.closest('[data-view-case]');
+      if (viewButton) {
+        openPreview(viewButton.getAttribute('data-view-case'), false);
+        return;
+      }
+      var updateButton = event.target.closest('[data-update-case]');
+      if (updateButton) {
+        openPreview(updateButton.getAttribute('data-update-case'), true);
+        return;
+      }
+      var deleteButton = event.target.closest('[data-delete-case]');
+      if (!deleteButton || !window.confirm('確定刪除此 TestCase？')) {
+        return;
+      }
+      try {
+        await window.testcaseApi.requestJson('/api/testcases/' +
+          deleteButton.getAttribute('data-delete-case'), { method: 'DELETE' });
+        if (lastPagination && lastPagination.count === 1 && page > 1) {
+          updateUrl(page - 1, perPage);
+        }
+        await loadResults();
+        window.showToast('TestCase 已刪除', 'success', 'top-center');
+      } catch (error) {
+        console.error('[TestCase Search] Failed to delete TestCase', error);
+        window.showToast('刪除 TestCase 失敗：' + error.message, 'error');
+      }
+    });
+
+    pagination.addEventListener('click', function (event) {
+      var button = event.target.closest('[data-page]');
+      if (!button || button.disabled) {
+        return;
+      }
+      updateUrl(Number(button.getAttribute('data-page')), perPage);
+      loadResults();
+    });
+    pageSize.addEventListener('change', function () {
+      updateUrl(1, Number(pageSize.value));
+      loadResults();
+    });
+    window.addEventListener('popstate', function () {
+      var current = new URLSearchParams(window.location.search);
+      query = (current.get('q') || '').trim();
+      page = positiveInteger(current.get('page'), 1);
+      perPage = [20, 50, 100].includes(Number(current.get('per_page')))
+        ? Number(current.get('per_page'))
+        : 20;
+      pageSize.value = String(perPage);
+      loadResults();
+    });
+    closePreviewButton.addEventListener('click', closePreview);
+    previewOverlay.addEventListener('click', closePreview);
+    previewEditButton.addEventListener('click', function () {
+      if (activeCase) {
+        renderEdit(activeCase);
+      }
+    });
+    previewSaveButton.addEventListener('click', async function () {
+      var caseTitle = previewDetail.querySelector('[name="case_title"]');
+      var fieldError = previewDetail.querySelector('[data-error-for="case_title"]');
+      if (!caseTitle || !caseTitle.value.trim()) {
+        if (fieldError) {
+          fieldError.textContent = '請輸入欄位';
+        }
+        return;
+      }
+      previewSaveButton.disabled = true;
+      previewSaveButton.textContent = 'Saving...';
+      try {
+        var payload = await window.testcaseApi.requestJson('/api/testcases/' + activeCase.id, {
+          method: 'PUT',
+          body: JSON.stringify({
+            module_id: Number(previewDetail.querySelector('[name="module_id"]').value),
+            case_title: caseTitle.value.trim(),
+            priority: previewDetail.querySelector('[name="priority"]').value,
+            preconditions: previewDetail.querySelector('[name="preconditions"]').value,
+            steps: previewDetail.querySelector('[name="steps"]').value,
+            expected_result: previewDetail.querySelector('[name="expected_result"]').value,
+            remark: previewDetail.querySelector('[name="remark"]').value
+          })
+        });
+        activeCase = payload.data;
+        renderPreview(activeCase);
+        await loadResults();
+        window.showToast('TestCase 已更新', 'success', 'top-center');
+      } catch (error) {
+        console.error('[TestCase Search] Failed to update TestCase', error);
+        previewSaveButton.disabled = false;
+        previewSaveButton.textContent = 'Save';
+        window.showToast('更新 TestCase 失敗：' + error.message, 'error');
+      }
+    });
+    loadResults();
+  })();
+</script>
+{% endblock %}

@@ -289,6 +289,27 @@ paths:
         - TestCases
       summary: 取得所有 TestCase（平面列表）
       operationId: listTestCases
+      description: 未提供分頁參數時回傳完整列表；提供 page 或 per_page 時由資料庫使用 LIMIT/OFFSET 分頁。
+      parameters:
+        - name: q
+          in: query
+          description: Case 名稱模糊查詢
+          schema:
+            type: string
+        - name: page
+          in: query
+          description: 頁碼，必須為正整數
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: per_page
+          in: query
+          description: 每頁筆數
+          schema:
+            type: integer
+            enum: [20, 50, 100]
+            default: 20
       responses:
         '200':
           description: 成功取得 TestCase 列表
@@ -296,6 +317,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TestCaseListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '500':
           $ref: '#/components/responses/InternalError'
     post:
@@ -615,9 +638,18 @@ components:
         id:
           type: integer
           example: 1
+        product_id:
+          type: integer
+          example: 1
+        product_name:
+          type: string
+          example: "Web 1.0"
         module_id:
           type: integer
           example: 1
+        module_name:
+          type: string
+          example: "Login"
         case_title:
           type: string
           example: "驗證登入成功"
@@ -632,7 +664,7 @@ components:
           example: "成功進入系統"
         priority:
           type: string
-          enum: [Low, Medium, High]
+          enum: [Low, Medium, High, Critical]
           example: "High"
         created_at:
           type: string
@@ -663,10 +695,31 @@ components:
         count:
           type: integer
           example: 3
+        query:
+          type: string
+          example: "登入"
         data:
           type: array
           items:
             $ref: '#/components/schemas/TestCase'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+          example: 1
+        per_page:
+          type: integer
+          enum: [20, 50, 100]
+          example: 20
+        total_items:
+          type: integer
+          example: 85
+        total_pages:
+          type: integer
+          example: 5
     TestCaseHierarchy:
       type: object
       properties:
@@ -750,7 +803,7 @@ components:
           example: "成功進入系統"
         priority:
           type: string
-          enum: [Low, Medium, High]
+          enum: [Low, Medium, High, Critical]
           default: "Medium"
     TestCaseUpdate:
       type: object
@@ -767,7 +820,7 @@ components:
           type: string
         priority:
           type: string
-          enum: [Low, Medium, High]
+          enum: [Low, Medium, High, Critical]
 
     # TestRun
     TestRun:
@@ -800,9 +853,19 @@ components:
         pending_count:
           type: integer
           example: 1
+        blocked_count:
+          type: integer
+          example: 0
+        skipped_count:
+          type: integer
+          example: 0
+        retest_count:
+          type: integer
+          example: 0
         progress_percent:
           type: integer
-          example: 60
+          description: 非 Pending 的 TestCase 佔全部 TestCase 的百分比
+          example: 90
     TestRunDetail:
       type: object
       properties:
@@ -825,14 +888,22 @@ components:
           type: integer
         pending_count:
           type: integer
+        blocked_count:
+          type: integer
+        skipped_count:
+          type: integer
+        retest_count:
+          type: integer
         progress_percent:
           type: integer
+          description: 非 Pending 的 TestCase 佔全部 TestCase 的百分比
         cases:
           type: array
           items:
             $ref: '#/components/schemas/TestRunTestCase'
     TestRunTestCase:
       type: object
+      description: TestRun 建立時保存的不可變 TestCase 快照；只有 status 與 updated_at 會隨執行更新。
       properties:
         relation_id:
           type: integer
@@ -846,10 +917,10 @@ components:
           type: string
         status:
           type: string
-          enum: [Pending, In Progress, Passed, Failed]
+          enum: [Pending, In Progress, Passed, Failed, Blocked, Skipped, Retest]
         priority:
           type: string
-          enum: [Low, Medium, High]
+          enum: [Low, Medium, High, Critical]
         preconditions:
           type: string
         steps:
@@ -858,11 +929,21 @@ components:
           type: string
         remark:
           type: string
+        test_case_created_at:
+          type: string
+          format: date-time
+          description: 來源 TestCase 建立時間的快照
+        test_case_updated_at:
+          type: string
+          format: date-time
+          description: 建立 TestRun 時來源 TestCase 的最後更新時間
         updated_at:
           type: string
           format: date-time
+          description: TestRun 中此案例執行狀態的最後更新時間
     TestRunCreate:
       type: object
+      description: 建立時會將選定 TestCase 的完整內容保存為不可變快照。
       required:
         - name
       properties:
@@ -894,9 +975,8 @@ components:
       properties:
         status:
           type: string
-          enum: [Pending, In Progress, Passed, Failed]
+          enum: [Pending, In Progress, Passed, Failed, Blocked, Skipped, Retest]
           example: "Passed"
-
     # Reset Response
     ResetResponse:
       type: object

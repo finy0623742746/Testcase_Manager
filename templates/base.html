@@ -9,18 +9,18 @@
 <body>
   <header>
     <a class="brand" href="{{ url_for('testcases') }}">TestCase 管理系統</a>
-    <form class="header-search" action="{{ url_for('testcases') }}" method="get" role="search">
+    <form class="header-search" action="{{ url_for('testcase_search') }}" method="get" role="search">
       <input
         type="search"
         name="q"
         value="{{ request.args.get('q', '') }}"
-        placeholder="搜尋"
-        aria-label="搜尋"
+        placeholder="查詢 TestCase"
+        aria-label="查詢 TestCase"
       >
       <button class="button" type="submit">查詢</button>
     </form>
     <nav>
-      <a class="nav-pill {% if request.endpoint in ['testcases', 'product_detail', 'preview_testcase', 'new_testcase', 'edit_testcase'] %}active{% endif %}" href="{{ url_for('testcases') }}">TestCase</a>
+      <a class="nav-pill {% if request.endpoint in ['testcases', 'testcase_search', 'product_detail', 'preview_testcase', 'new_testcase', 'edit_testcase'] %}active{% endif %}" href="{{ url_for('testcases') }}">TestCase</a>
       <a class="nav-pill {% if request.endpoint in ['testruns', 'testrun_detail', 'testrun_report'] %}active{% endif %}" href="{{ url_for('testruns') }}">TestRun</a>
     </nav>
   </header>
@@ -37,6 +37,20 @@
     {% block content %}{% endblock %}
   </main>
   <script>
+    window.addEventListener('error', function (event) {
+      console.error('[Frontend Error]', {
+        message: event.message,
+        source: event.filename,
+        line: event.lineno,
+        column: event.colno,
+        error: event.error
+      });
+    });
+
+    window.addEventListener('unhandledrejection', function (event) {
+      console.error('[Unhandled Promise Rejection]', event.reason);
+    });
+
     window.showToast = function (message, category, position) {
       var stack = document.querySelector('.toast-stack');
       if (!stack) {

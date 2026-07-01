@@ -7,15 +7,15 @@
     <span class="product-case-count">{{ case_count }}_TestCase</span>
   </div>
   <div class="toolbar">
-    <button class="button outline" id="open-module-modal-button" type="button">新增 Module</button>
-    <button class="button" id="open-case-modal-button" type="button" {% if not modules %}disabled{% endif %}>新增 TestCase</button>
+    <button class="button outline" id="open-module-modal-button" type="button">+ Module</button>
+    <button class="button" id="open-case-modal-button" type="button" {% if not modules %}disabled{% endif %}>+ TestCase</button>
   </div>
 </section>
 
 <section class="module-board" id="module-board" data-product-id="{{ product.id }}" data-modules='{{ modules | tojson | safe }}'>
   {% for module in modules %}
-    <article class="module-card" data-module-id="{{ module.id }}">
-      <div class="module-card-header">
+    <details class="module-card" data-module-id="{{ module.id }}" open>
+      <summary class="module-card-header">
         <div class="module-title-row">
           <h2>{{ module.name }}</h2>
           <span class="module-case-count">{{ module.cases|length }}_TestCase </span>
@@ -24,7 +24,7 @@
           <button class="icon-button product-add-button module-add-button" type="button" data-create-case-for-module="{{ module.id }}" aria-label="新增 {{ module.name }} TestCase">＋</button>
           <button class="icon-button product-delete-button module-delete-button" type="button" data-delete-module="{{ module.id }}" aria-label="刪除 {{ module.name }} Module"><b>🗑</b></button>
         </div>
-      </div>
+      </summary>
 
       {% if module.cases %}
         <ul class="case-list">
@@ -47,12 +47,12 @@
                   <button class="icon-button icon-button-success" type="button" data-save-case-title="{{ case.id }}" aria-label="保存 {{ case.case_title }}">✓</button>
                 </div>
               </div>
-              <div class="case-priority">{{ case.priority or 'Medium' }}</div>
+              <div class="case-priority"><span class="priority-badge priority-{{ (case.priority or 'Medium')|lower }}">{{ case.priority or 'Medium' }}</span></div>
               <div class="case-update" data-case-update>{{ (case.updated_at or case.created_at or '')[:10] or 'N/A' }}</div>
               <div class="actions compact">
-                <button class="button outline" type="button" data-preview-case="{{ case.id }}">預覽</button>
-                <button class="button outline" type="button" data-edit-case="{{ case.id }}">修改</button>
-                <button class="button danger" type="button" data-delete-case="{{ case.id }}">刪除</button>
+                <button class="button preview-run-case-button" type="button" data-preview-case="{{ case.id }}">View</button>
+                <button class="button preview-run-case-button" type="button" data-edit-case="{{ case.id }}">Update</button>
+                <button class="button danger" type="button" data-delete-case="{{ case.id }}">Delete</button>
               </div>
             </li>
           {% endfor %}
@@ -60,7 +60,7 @@
       {% else %}
         <div class="empty-state">此 Module 尚未有 TestCase</div>
       {% endif %}
-    </article>
+    </details>
   {% endfor %}
 
 {% if not modules %}
@@ -77,7 +77,7 @@
         <button class="icon-button icon-button-success" type="button" data-save-case-draft aria-label="保存新增 TestCase">✓</button>
       </div>
     </div>
-    <div class="case-priority">Medium</div>
+    <div class="case-priority"><span class="priority-badge priority-medium">Medium</span></div>
     <div class="case-update">N/A</div>
     <div class="actions compact"></div>
   </li>
@@ -167,7 +167,7 @@
       <div class="empty-state">載入中...</div>
     </div>
     <div class="drawer-actions">
-      <button id="preview-edit-button" class="button" type="button">修改</button>
+      <button id="preview-edit-button" class="button" type="button">Update</button>
       <button id="preview-save-button" class="button outline is-hidden" type="button" aria-hidden="true">保存</button>
     </div>
   </div>
@@ -689,7 +689,7 @@
       html += '<div class="drawer-form-card drawer-form-card-wide"><label class="drawer-field-label">Module</label><select name="module_id">' + moduleOptions(caseData.module_id) + '</select></div>';
       html += '<div class="drawer-form-card drawer-form-card-wide"><label class="drawer-field-label">Case <span class="required-mark">*</span></label><input name="case_title" value="' + escapeHtml(caseData.case_title || '') + '"><div class="field-error" data-error-for="case_title"></div></div>';
       html += '<div class="drawer-form-card drawer-form-card-wide"><label class="drawer-field-label">Priority</label><select name="priority">' +
-        ['Low', 'Medium', 'High'].map(function (value) {
+        ['Low', 'Medium', 'High', 'Critical'].map(function (value) {
           var selected = (caseData.priority || 'Medium') === value ? ' selected' : '';
           return '<option value="' + value + '"' + selected + '>' + value + '</option>';
         }).join('') +
@@ -752,10 +752,14 @@
       var cancelCaseTitleButton = event.target.closest('[data-cancel-case-title-edit]');
       var deleteModuleButton = event.target.closest('[data-delete-module]');
       if (createCaseButton) {
+        event.preventDefault();
+        event.stopPropagation();
         createCaseDraft(createCaseButton.getAttribute('data-create-case-for-module'));
         return;
       }
       if (deleteModuleButton) {
+        event.preventDefault();
+        event.stopPropagation();
         deleteModule(deleteModuleButton.getAttribute('data-delete-module'));
         return;
       }

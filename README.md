@@ -29,35 +29,56 @@
 
 ## 快速開始
 
+以下指令適用於 Windows PowerShell。
+
 1. 建立虛擬環境
 
 ```powershell
 python -m venv .venv
+```
+
+在專案目錄建立獨立的 Python 環境，避免套件與其他專案互相影響。
+
+2. 啟用虛擬環境
+
+```powershell
 .\.venv\Scripts\activate
-pip install -r requirements.txt
 ```
 
-2. 設定環境變數
+啟用成功後，終端機提示字元通常會出現 `(.venv)`。
+
+3. 安裝相依套件
 
 ```powershell
-copy .env.example .env
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 ```
 
-3. 啟動服務
+先將虛擬環境內的 `pip` 升級至新版，再安裝 Flask、python-dotenv 與 SQLAlchemy 等必要套件。
+
+4. 建立本機環境設定
 
 ```powershell
-set FLASK_APP=app.py
-set FLASK_ENV=development
-flask run
+Copy-Item .env.example .env
 ```
 
-或直接使用：
+請勿將包含正式密鑰的 `.env` 提交至版本控制。
+
+5. 啟動服務
+
+```powershell
+python -m flask --app app run --debug
+```
+
+`--debug` 適合本機開發，修改程式後會自動重新載入，並在錯誤發生時顯示詳細資訊。正式環境請勿使用除錯模式。
+
+也可以直接使用：
 
 ```powershell
 python app.py
 ```
 
-4. 開啟瀏覽器
+6. 開啟瀏覽器
 
 ```text
 http://127.0.0.1:5000
@@ -75,17 +96,23 @@ FLASK_APP=app.py
 SECRET_KEY=dev-secret-key
 ```
 
-正式使用時，建議自行替換 `SECRET_KEY`，不要沿用範例值。
+使用 `python -m flask --app app run --debug` 啟動時，不需要另外以 PowerShell 設定 `FLASK_APP` 或 `FLASK_ENV`。正式使用時，請自行替換 `SECRET_KEY`，不要沿用範例值。
 
 ## 開發中的注意事項
 
 - `app.py` 的設定已改為透過 `.env` 載入，避免硬編碼敏感資訊
 - 修改模板或樣式後，如果畫面沒有更新，通常需要重新啟動 Flask 並清除瀏覽器快取
 - 每次完成或調整功能時，請同步更新 [`SYSTEM_MINDMAP.md`](./SYSTEM_MINDMAP.md)，讓功能狀態能作為後續 TestCase 撰寫依據
-- 更新 [`規格紀錄.md`](./規格紀錄.md) 時，請使用 `yyyy-mm-dd` 日期標題並置頂新增；每個項目前方請標示影響範圍：`[前端]`、`[後端]` 或 `[前端/後端]`
-- 若當日已存在相同或相關主題的規格紀錄，請將新增項目記錄在該日期主題區塊內；若改動與當日既有主題不相關，請在同一日期下另開新的主題區塊並置於上方
+- 更新 [`規格紀錄.md`](./規格紀錄.md) 時，請使用三層結構：第一層 `# 規格紀錄`、第二層 `## yyyy-mm-dd` 日期、第三層 `### 主題`，主題內容以清單記錄
+- 規格日期由新到舊排列；同日期的新主題置於該日期最上方，同主題的新條目置於該主題最上方
+- 無法確認日期的既有內容統一放在 `## 未標日期`，並置於所有日期區段之後的檔案最下方
+- 若當日已存在相同或相關主題，請將新增項目記錄在既有主題內；若改動與當日既有主題不相關，請在同一日期下新增第三層主題
+- 若既有主題後續擴充到超出原本標題範圍，請直接調整第三層主題名稱，讓標題能涵蓋實際內容
+- 每個規格項目前方請標示影響範圍：`[前端]`、`[後端]` 或 `[前端/後端]`
 - 若內容有變動或移除，已記錄的內容也要做相對應調整，避免規格紀錄與實際實作不一致
 - 新增或調整 API 時，請同步更新 [`api-spec.yaml`](./api-spec.yaml)，讓 `http://127.0.0.1:5000/api` 的 API 文件保持最新
+- 新功能或新頁面的後端資料必須透過 Fetch/XHR API 載入
+- 純前端錯誤必須輸出至瀏覽器 Console，保留足以定位問題的錯誤資訊
 
 ## AI 協作說明
 
