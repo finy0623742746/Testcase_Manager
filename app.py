@@ -1,7 +1,7 @@
 import os
 
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_from_directory
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
 from database import initialize_schema, reset_all_data
 from models import Product, Module, TestCase, Project, STATUS_VALUES
@@ -16,6 +16,7 @@ api_cache_state = {
     'version': 0,
     'last_cleared_at': None,
 }
+TAIPEI_TIMEZONE = timezone(timedelta(hours=8))
 
 initialize_schema()
 
@@ -27,18 +28,76 @@ def _find_product_tree(product_id):
             return product
     return None
 
+
+def _group_testrun_cases(cases):
+    grouped = []
+    product_map = {}
+    for case in cases:
+        product_name = case.get('product_name') or 'N/A'
+        module_name = case.get('module_name') or 'N/A'
+        product = product_map.get(product_name)
+        if not product:
+            product = {
+                'product_name': product_name,
+                'modules': [],
+                '_module_map': {},
+            }
+            product_map[product_name] = product
+            grouped.append(product)
+        module = product['_module_map'].get(module_name)
+        if not module:
+            module = {
+                'module_name': module_name,
+                'cases': [],
+            }
+            product['_module_map'][module_name] = module
+            product['modules'].append(module)
+        module['cases'].append(case)
+    for product in grouped:
+        product.pop('_module_map', None)
+    return grouped
+
+
+def _testrun_local_datetime(created_at):
+    if not created_at:
+        return None
+    try:
+        value = datetime.fromisoformat(created_at)
+    except (TypeError, ValueError):
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(TAIPEI_TIMEZONE)
+
+
+def _normalize_api_datetime(value):
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError('created_at must be an ISO 8601 date-time with timezone')
+    normalized = value.strip()
+    if normalized.endswith(('Z', 'z')):
+        normalized = normalized[:-1] + '+00:00'
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError as error:
+        raise ValueError('created_at must be a valid ISO 8601 date-time') from error
+    if parsed.tzinfo is None:
+        raise ValueError('created_at timezone is required')
+    return parsed.astimezone(timezone.utc).replace(tzinfo=None).strftime('%Y-%m-%d %H:%M:%S')
+
+
 @app.route('/')
 def home():
     return redirect(url_for('testcases'))
 
 @app.route('/testcases')
 def testcases():
-    query = request.args.get('q', '').strip()
     products = Product.all()
-    if query:
-        lowered_query = query.lower()
-        products = [product for product in products if lowered_query in product['name'].lower()]
-    return render_template('product_versions.html', products=products, query=query)
+    return render_template('product_versions.html', products=products)
+
+
+@app.route('/testcases/search')
+def testcase_search():
+    return render_template('testcase_search.html')
 
 
 @app.route('/testcases/<int:product_id>')
@@ -53,7 +112,7 @@ def product_detail(product_id):
         product=product,
         modules=product['modules'],
         case_count=case_count,
-        priorities=['Low', 'Medium', 'High'],
+        priorities=['Low', 'Medium', 'High', 'Critical'],
     )
 
 @app.route('/testcases/new', methods=['GET', 'POST'])
@@ -83,7 +142,7 @@ def new_testcase():
                 app.logger.exception('Failed to create testcase')
                 flash(f'TestCase 建立失敗：{error}', 'error')
     products = Product.all()
-    return render_template('testcase_form.html', products=products, priorities=['Low', 'Medium', 'High'])
+    return render_template('testcase_form.html', products=products, priorities=['Low', 'Medium', 'High', 'Critical'])
 
 @app.route('/testcases/case/<int:case_id>')
 def preview_testcase(case_id):
@@ -119,7 +178,7 @@ def edit_testcase(case_id):
                 flash(f'TestCase 更新失敗：{error}', 'error')
     product = Product.get(case['product_id'])
     modules = Module.by_product(case['product_id'])
-    return render_template('testcase_form.html', case=case, product=product, modules=modules, priorities=['Low', 'Medium', 'High'])
+    return render_template('testcase_form.html', case=case, product=product, modules=modules, priorities=['Low', 'Medium', 'High', 'Critical'])
 
 @app.route('/testcases/<int:case_id>/delete', methods=['POST'])
 def delete_testcase(case_id):
@@ -133,24 +192,42 @@ def testruns():
     grouped_projects = []
     groups_by_month = {}
     uncategorized_projects = []
+    current_month = datetime.now(TAIPEI_TIMEZONE).strftime('%Y-%m')
     for project in all_projects:
         created_at = project.get('created_at') or ''
-        month_key = created_at[:7] if len(created_at) >= 7 else ''
+        local_created_at = _testrun_local_datetime(created_at)
+        month_key = local_created_at.strftime('%Y-%m') if local_created_at else ''
+        project['created_date'] = local_created_at.strftime('%Y-%m-%d') if local_created_at else None
         if month_key:
             if month_key not in groups_by_month:
                 groups_by_month[month_key] = []
-                grouped_projects.append({'label': month_key, 'projects': groups_by_month[month_key]})
+                grouped_projects.append({
+                    'label': month_key,
+                    'projects': groups_by_month[month_key],
+                    'is_current': month_key == current_month,
+                })
             groups_by_month[month_key].append(project)
         else:
             uncategorized_projects.append(project)
+    if current_month not in groups_by_month:
+        grouped_projects.insert(0, {
+            'label': current_month,
+            'projects': [],
+            'is_current': True,
+        })
     if uncategorized_projects:
-        grouped_projects.append({'label': '未分類', 'projects': uncategorized_projects})
+        grouped_projects.append({
+            'label': '未分類',
+            'projects': uncategorized_projects,
+            'is_current': False,
+        })
     testcase_hierarchy = TestCase.list_hierarchy()
     return render_template(
         'projects.html',
         projects=all_projects,
         grouped_projects=grouped_projects,
         testcase_hierarchy=testcase_hierarchy,
+        current_month=current_month,
     )
 
 @app.route('/testruns/new', methods=['POST'])
@@ -171,7 +248,12 @@ def testrun_detail(project_id):
     if not project:
         flash('找不到指定 TestRun', 'error')
         return redirect(url_for('testruns'))
-    return render_template('project_detail.html', project=project, statuses=STATUS_VALUES)
+    return render_template(
+        'project_detail.html',
+        project=project,
+        statuses=STATUS_VALUES,
+        grouped_cases=_group_testrun_cases(project.get('cases', [])),
+    )
 
 @app.route('/testruns/<int:project_id>/report')
 def testrun_report(project_id):
@@ -337,6 +419,34 @@ def api_delete_module(module_id):
 def api_list_testcases():
     try:
         query = request.args.get('q', '').strip()
+        page_value = request.args.get('page')
+        per_page_value = request.args.get('per_page')
+        if page_value is not None or per_page_value is not None:
+            try:
+                page = int(page_value or '1')
+                per_page = int(per_page_value or '20')
+            except ValueError:
+                return jsonify({'error': 'page and per_page must be integers'}), 400
+            if page < 1:
+                return jsonify({'error': 'page must be a positive integer'}), 400
+            if per_page not in (20, 50, 100):
+                return jsonify({'error': 'per_page must be one of 20, 50, 100'}), 400
+
+            cases, total_items = TestCase.search_page(query, page, per_page)
+            total_pages = (total_items + per_page - 1) // per_page
+            return jsonify({
+                'message': 'TestCases retrieved successfully',
+                'count': len(cases),
+                'query': query,
+                'data': cases,
+                'pagination': {
+                    'page': page,
+                    'per_page': per_page,
+                    'total_items': total_items,
+                    'total_pages': total_pages,
+                },
+            }), 200
+
         cases = TestCase.all(query=query or None)
         return jsonify({
             'message': 'TestCases retrieved successfully',
@@ -440,10 +550,19 @@ def api_create_testrun():
         data = request.get_json()
         if not data or not data.get('name'):
             return jsonify({'error': 'name is required'}), 400
+        try:
+            created_at = (
+                _normalize_api_datetime(data['created_at'])
+                if data.get('created_at') is not None
+                else None
+            )
+        except ValueError as error:
+            return jsonify({'error': str(error)}), 400
         project_id = Project.create(
             data['name'],
             data.get('description', ''),
-            data.get('test_case_ids', [])
+            data.get('test_case_ids', []),
+            created_at=created_at,
         )
         return jsonify(Project.get(project_id)), 201
     except Exception as e:

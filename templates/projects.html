@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 {% block content %}
-<section class="page-header testrun-header">
+<section class="page-header testrun-header" data-page-current-month="{{ current_month }}">
   <div>
     <h1>TestRun</h1>
     <p>建立測試執行批次，追蹤 TestCase 狀態與通過率</p>
@@ -10,69 +10,84 @@
 {% if grouped_projects %}
   <div class="testrun-month-stack">
     {% for group in grouped_projects %}
-      <section class="panel testrun-month-section">
-        <div class="testrun-month-heading">
-          <div class="testrun-month-title-row">
-            <h2 class="testrun-month-title">{{ group.label }}</h2>
-            <span class="testrun-month-count">{{ group.projects|length }}_TestRun</span>
-          </div>
-          <button class="icon-button product-add-button" type="button" data-open-testrun-modal aria-label="新增 TestRun">＋</button>
-        </div>
-        <div class="table-wrap">
-          <table class="testrun-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Progress</th>
-                <th class="text-center">Passed/Total</th>
-                <th class="text-center">Failed</th>
-                <th class="text-center">In Progress</th>
-                <th class="text-center">Pending</th>
-                <th>Created_Time</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for project in group.projects %}
+      {% if group.projects %}
+        <details class="panel testrun-month-section testrun-month-group" data-current-month-group="{{ 'true' if group.is_current else 'false' }}" {% if group.is_current %}open{% endif %}>
+          <summary class="testrun-month-heading">
+            <div class="testrun-month-title-row">
+              <h2 class="testrun-month-title">{{ group.label }}</h2>
+              <span class="testrun-month-count">{{ group.projects|length }}_TestRun</span>
+            </div>
+            {% if group.is_current %}
+              <button class="icon-button product-add-button" type="button" data-open-testrun-modal aria-label="新增 TestRun">＋</button>
+            {% endif %}
+          </summary>
+          <div class="table-wrap">
+            <table class="testrun-table">
+              <colgroup>
+                <col class="testrun-list-column-name">
+                <col class="testrun-list-column-progress">
+                <col class="testrun-list-column-pass-rate">
+                <col class="testrun-list-column-created">
+                <col class="testrun-list-column-actions">
+              </colgroup>
+              <thead>
                 <tr>
-                  <td><a class="table-link" href="{{ url_for('testrun_detail', project_id=project.id) }}">{{ project.name }}</a></td>
-                  <td>
-                    <div class="progress-cell">
-                      <div class="progress-track" aria-label="Progress {{ project.progress_percent }}%">
-                        <span style="width: {{ project.progress_percent }}%"></span>
-                      </div>
-                      <strong>{{ project.progress_percent }}%</strong>
-                    </div>
-                  </td>
-                  <td class="text-center">{{ project.passed_count }}/{{ project.total_count }}</td>
-                  <td class="text-center">{{ project.failed_count }}</td>
-                  <td class="text-center">{{ project.in_progress_count }}</td>
-                  <td class="text-center">{{ project.pending_count }}</td>
-                  <td>{{ project.created_at or 'N/A' }}</td>
-                  <td>
-                    <div class="actions compact testrun-actions">
-                      <a class="button testrun-action-button" href="{{ url_for('testrun_detail', project_id=project.id) }}">Detail</a>
-                      <a class="button testrun-action-button" href="{{ url_for('testrun_report', project_id=project.id) }}">Report</a>
-                    </div>
-                  </td>
+                  <th>Name</th>
+                  <th>Progress</th>
+                  <th>Pass Rate</th>
+                  <th class="text-center">Created_Time</th>
+                  <th>Actions</th>
                 </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      </section>
+              </thead>
+              <tbody>
+                {% for project in group.projects %}
+                  <tr data-testrun-id="{{ project.id }}">
+                    <td><a class="table-link" href="{{ url_for('testrun_detail', project_id=project.id) }}">{{ project.name }}</a></td>
+                    <td>
+                      <div class="progress-cell">
+                        <div class="progress-track" data-run-progress-track aria-label="Progress {{ project.progress_percent }}%">
+                          <span style="width: {{ project.progress_percent }}%"></span>
+                        </div>
+                        <strong data-run-progress>{{ project.progress_percent }}%</strong>
+                      </div>
+                    </td>
+                    <td>
+                      <div class="progress-cell{% if project.pass_rate_percent is none %} progress-cell-empty{% endif %}" data-run-pass-rate-cell>
+                        {% if project.pass_rate_percent is not none %}
+                          <div class="progress-track" data-run-pass-rate-track aria-label="Pass Rate {{ project.pass_rate_percent }}%">
+                            <span style="width: {{ project.pass_rate_percent }}%"></span>
+                          </div>
+                        {% endif %}
+                        <strong data-run-pass-rate>{{ project.pass_rate_percent if project.pass_rate_percent is not none else 'N/A' }}{% if project.pass_rate_percent is not none %}%{% endif %}</strong>
+                      </div>
+                    </td>
+                    <td class="text-center">{{ project.created_date or 'N/A' }}</td>
+                    <td>
+                      <div class="actions compact testrun-actions">
+                        <a class="button testrun-action-button" href="{{ url_for('testrun_detail', project_id=project.id) }}">Detail</a>
+                        <a class="button testrun-action-button" href="{{ url_for('testrun_report', project_id=project.id) }}">Report</a>
+                        <button class="button testrun-action-button testrun-action-danger" type="button" data-delete-testrun="{{ project.id }}" data-testrun-name="{{ project.name }}">Delete</button>
+                      </div>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      {% else %}
+        <section class="panel testrun-month-section" data-current-month-group="true">
+          <div class="testrun-month-heading">
+            <div class="testrun-month-title-row">
+              <h2 class="testrun-month-title">{{ group.label }}</h2>
+              <span class="testrun-month-count">0_TestRun</span>
+            </div>
+            <button class="icon-button product-add-button" type="button" data-open-testrun-modal aria-label="新增 TestRun">＋</button>
+          </div>
+          <p class="empty-state">尚未建立 TestRun</p>
+        </section>
+      {% endif %}
     {% endfor %}
-  </div>
-{% else %}
-  <div class="panel">
-    <div class="testrun-month-heading">
-      <div class="testrun-month-title-row">
-        <h2 class="testrun-month-title">TestRun</h2>
-        <span class="testrun-month-count">0_TestRun</span>
-      </div>
-      <button class="icon-button product-add-button" type="button" data-open-testrun-modal aria-label="新增 TestRun">＋</button>
-    </div>
-    <p class="empty-state">尚未建立 TestRun</p>
   </div>
 {% endif %}
 
@@ -86,7 +101,7 @@
       </div>
       <button class="close-button" type="button" data-close-testrun-modal aria-label="關閉">×</button>
     </div>
-    <form method="post" action="{{ url_for('new_testrun') }}" id="testrun-form">
+    <form method="post" action="{{ url_for('new_testrun') }}" id="testrun-form" data-create-api="{{ url_for('api_create_testrun') }}">
       <div class="modal-content testrun-modal-content">
         <div class="testrun-form-grid">
           <div class="field-group">
@@ -173,6 +188,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/testrun_api.js') }}"></script>
 <script>
   (function () {
     var hierarchy = {{ testcase_hierarchy|tojson }};
@@ -196,9 +212,45 @@
     var closePreviewButton = document.getElementById('close-testrun-preview');
     var filterButtons = document.querySelectorAll('[data-filter-product]');
     var caseRows = document.querySelectorAll('.testrun-case-row');
+    var submitButton = form.querySelector('button[type="submit"]');
+    var testrunTables = document.querySelectorAll('.testrun-table');
+    var pageCurrentMonthNode = document.querySelector('[data-page-current-month]');
+    var currentMonthGroupTitle = document.querySelector('[data-current-month-group="true"] .testrun-month-title');
+    var pageCurrentMonth = pageCurrentMonthNode.dataset.pageCurrentMonth ||
+      (currentMonthGroupTitle ? currentMonthGroupTitle.textContent.trim() : '');
+
+    var savedMessage = window.sessionStorage.getItem('testrun-message');
+    if (savedMessage) {
+      window.sessionStorage.removeItem('testrun-message');
+      window.showToast(savedMessage, 'success', 'top-center');
+    }
 
     function displayValue(value) {
       return value ? value : 'N/A';
+    }
+
+    function getTaipeiMonth() {
+      var parts = new Intl.DateTimeFormat('en', {
+        timeZone: 'Asia/Taipei',
+        year: 'numeric',
+        month: '2-digit'
+      }).formatToParts(new Date());
+      var values = {};
+      parts.forEach(function (part) {
+        values[part.type] = part.value;
+      });
+      return values.year + '-' + values.month;
+    }
+
+    function reloadIfMonthChanged() {
+      if (!pageCurrentMonth) {
+        return false;
+      }
+      if (getTaipeiMonth() === pageCurrentMonth) {
+        return false;
+      }
+      window.location.reload();
+      return true;
     }
 
     function escapeHtml(value) {
@@ -251,7 +303,61 @@
       countNode.textContent = selected + ' selected';
     }
 
+    function readJson(response) {
+      return response.json().catch(function () {
+        return {};
+      }).then(function (payload) {
+        if (!response.ok) {
+          throw new Error(payload.error || '請求失敗');
+        }
+        return payload;
+      });
+    }
+
+    function hydrateTestRunRows() {
+      window.testrunApi.list().then(function (projects) {
+        projects.forEach(function (project) {
+          var row = document.querySelector('[data-testrun-id="' + project.id + '"]');
+          if (!row) {
+            return;
+          }
+          var progressTrack = row.querySelector('[data-run-progress-track]');
+          progressTrack.setAttribute('aria-label', 'Progress ' + project.progress_percent + '%');
+          progressTrack.querySelector('span').style.width = project.progress_percent + '%';
+          row.querySelector('[data-run-progress]').textContent = project.progress_percent + '%';
+
+          var passCell = row.querySelector('[data-run-pass-rate-cell]');
+          var passValue = row.querySelector('[data-run-pass-rate]');
+          var passTrack = row.querySelector('[data-run-pass-rate-track]');
+          if (project.pass_rate_percent === null || project.pass_rate_percent === undefined) {
+            if (passTrack) {
+              passTrack.remove();
+            }
+            passCell.classList.add('progress-cell-empty');
+            passValue.textContent = 'N/A';
+            return;
+          }
+          if (!passTrack) {
+            passTrack = document.createElement('div');
+            passTrack.className = 'progress-track';
+            passTrack.setAttribute('data-run-pass-rate-track', '');
+            passTrack.appendChild(document.createElement('span'));
+            passCell.insertBefore(passTrack, passValue);
+          }
+          passCell.classList.remove('progress-cell-empty');
+          passTrack.setAttribute('aria-label', 'Pass Rate ' + project.pass_rate_percent + '%');
+          passTrack.querySelector('span').style.width = project.pass_rate_percent + '%';
+          passValue.textContent = project.pass_rate_percent + '%';
+        });
+      }).catch(function (error) {
+        window.showToast('載入 TestRun 失敗：' + error.message, 'error');
+      });
+    }
+
     function openModal() {
+      if (reloadIfMonthChanged()) {
+        return;
+      }
       modal.classList.add('active');
       modal.setAttribute('aria-hidden', 'false');
       var nameInput = form.querySelector('[name="project_name"]');
@@ -274,8 +380,26 @@
       });
     }
 
+    function deleteTestrun(testrunId, testrunName) {
+      if (!window.confirm('確定刪除 TestRun「' + (testrunName || '未命名') + '」？')) {
+        return;
+      }
+      window.testrunApi.delete(testrunId)
+        .then(function () {
+          window.sessionStorage.setItem('testrun-message', 'TestRun 已刪除');
+          window.location.reload();
+        })
+        .catch(function (error) {
+          window.showToast('刪除 TestRun 失敗：' + error.message, 'error', 'top-center');
+        });
+    }
+
     openButtons.forEach(function (button) {
-      button.addEventListener('click', openModal);
+      button.addEventListener('click', function (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        openModal();
+      });
     });
     document.querySelectorAll('[data-close-testrun-modal]').forEach(function (button) {
       button.addEventListener('click', closeModal);
@@ -312,10 +436,24 @@
       }
     });
 
+    testrunTables.forEach(function (testrunTable) {
+      testrunTable.addEventListener('click', function (event) {
+        var deleteButton = event.target.closest('[data-delete-testrun]');
+        if (!deleteButton) {
+          return;
+        }
+        deleteTestrun(deleteButton.getAttribute('data-delete-testrun'), deleteButton.getAttribute('data-testrun-name'));
+      });
+    });
+
     closePreviewButton.addEventListener('click', closePreview);
     previewOverlay.addEventListener('click', closePreview);
 
     form.addEventListener('submit', function (event) {
+      if (reloadIfMonthChanged()) {
+        event.preventDefault();
+        return;
+      }
       var name = form.querySelector('[name="project_name"]').value.trim();
       if (!name) {
         event.preventDefault();
@@ -325,6 +463,39 @@
       if (!document.querySelector('.testrun-case-row input:checked')) {
         event.preventDefault();
         window.showToast('請至少選擇一個 TestCase', 'error', 'top-center');
+        return;
+      }
+
+      event.preventDefault();
+      var selectedCaseIds = Array.from(form.querySelectorAll('input[name="test_case_ids"]:checked')).map(function (input) {
+        return Number(input.value);
+      });
+      var originalButtonText = submitButton.textContent;
+      submitButton.disabled = true;
+      submitButton.textContent = '保存中...';
+
+      window.testrunApi.create({
+          name: name,
+          description: form.querySelector('[name="description"]').value.trim(),
+          test_case_ids: selectedCaseIds
+        })
+        .then(function () {
+          window.sessionStorage.setItem('testrun-message', 'TestRun 已建立');
+          window.location.reload();
+        })
+        .catch(function (error) {
+          window.showToast('建立 TestRun 失敗：' + error.message, 'error', 'top-center');
+          submitButton.disabled = false;
+          submitButton.textContent = originalButtonText;
+        });
+    });
+
+    hydrateTestRunRows();
+    window.setInterval(reloadIfMonthChanged, 60000);
+    window.addEventListener('focus', reloadIfMonthChanged);
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden) {
+        reloadIfMonthChanged();
       }
     });
   })();

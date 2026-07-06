@@ -13,70 +13,148 @@
   </div>
 </section>
 
-<section class="testrun-summary-grid">
-  <div class="summary-card summary-card-progress">
-    <span class="summary-label">Progress</span>
-    <strong>{{ project.progress_percent }}%</strong>
-    <div class="progress-track">
-      <span style="width: {{ project.progress_percent }}%"></span>
+<section class="testrun-detail-summary">
+  <div class="summary-card testrun-metric-card">
+    <div class="testrun-metric-section">
+      <span class="summary-label">Progress</span>
+      <div class="testrun-metric-value" id="detail-progress-value">
+        <div class="progress-track" id="detail-progress-track" aria-label="Progress {{ project.progress_percent }}%">
+          <span style="width: {{ project.progress_percent }}%"></span>
+        </div>
+        <strong id="detail-progress-percent">{{ project.progress_percent }}%</strong>
+      </div>
+    </div>
+    <div class="testrun-metric-section">
+      <span class="summary-label">Pass Rate</span>
+      <div class="testrun-metric-value{% if project.pass_rate_percent is none %} testrun-metric-value-empty{% endif %}" id="detail-pass-rate-value">
+        {% if project.pass_rate_percent is not none %}
+          <div class="progress-track" id="detail-pass-rate-track" aria-label="Pass Rate {{ project.pass_rate_percent }}%">
+            <span style="width: {{ project.pass_rate_percent }}%"></span>
+          </div>
+        {% endif %}
+        <strong id="detail-pass-rate-percent">{{ project.pass_rate_percent if project.pass_rate_percent is not none else 'N/A' }}{% if project.pass_rate_percent is not none %}%{% endif %}</strong>
+      </div>
     </div>
   </div>
-  <div class="summary-card"><span class="summary-label">Passed/Total</span><strong>{{ project.passed_count }}/{{ project.total_count }}</strong></div>
-  <div class="summary-card"><span class="summary-label">Failed</span><strong>{{ project.failed_count }}</strong></div>
-  <div class="summary-card"><span class="summary-label">In Progress</span><strong>{{ project.in_progress_count }}</strong></div>
-  <div class="summary-card"><span class="summary-label">Pending</span><strong>{{ project.pending_count }}</strong></div>
+  <div class="summary-card testrun-status-card">
+    <div class="testrun-status-item"><span class="summary-label">Pending</span><strong data-status-count="pending">{{ project.pending_count }}</strong></div>
+    <div class="testrun-status-item"><span class="summary-label">In Progress</span><strong data-status-count="in_progress">{{ project.in_progress_count }}</strong></div>
+    <div class="testrun-status-item"><span class="summary-label">Passed</span><strong data-status-count="passed">{{ project.passed_count }}</strong></div>
+    <div class="testrun-status-item"><span class="summary-label">Failed</span><strong data-status-count="failed">{{ project.failed_count }}</strong></div>
+    <div class="testrun-status-item"><span class="summary-label">Blocked</span><strong data-status-count="blocked">{{ project.blocked_count }}</strong></div>
+    <div class="testrun-status-item"><span class="summary-label">Skipped</span><strong data-status-count="skipped">{{ project.skipped_count }}</strong></div>
+    <div class="testrun-status-item"><span class="summary-label">Retest</span><strong data-status-count="retest">{{ project.retest_count }}</strong></div>
+  </div>
 </section>
 
-<div class="panel">
-  <div class="panel-heading">
-    <div>
-      <div class="panel-title">TestCase 狀態</div>
-      <div class="panel-subtitle">更新每個 TestCase 的執行狀態，進度百分比會依 Passed 重新計算</div>
+<div class="panel testrun-detail-panel">
+  <div class="panel-heading testrun-detail-heading">
+    <div class="panel-title">TestCase 狀態</div>
+    <div class="testrun-detail-actions">
+      <label class="testrun-status-filter">
+        <select id="testrun-status-filter" aria-label="依狀態篩選 TestCase">
+          <option value="all">All</option>
+          <option value="Pending">Pending</option>
+          <option value="In Progress">In Progress</option>
+          <option value="Passed">Passed</option>
+          <option value="Failed">Failed</option>
+          <option value="Blocked">Blocked</option>
+          <option value="Skipped">Skipped</option>
+          <option value="Retest">Retest</option>
+        </select>
+      </label>
+      <button class="button testrun-update-button" id="save-testrun-statuses" type="button" disabled>Update</button>
     </div>
   </div>
-  {% if project.cases %}
-    <div class="table-wrap">
-      <table class="testrun-detail-table">
-        <thead>
-          <tr>
-            <th>Case</th>
-            <th>Product/Version</th>
-            <th>Module</th>
-            <th>Priority</th>
-            <th>Status</th>
-            <th>Updated</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for case in project.cases %}
-            <tr>
-              <td>{{ case.case_title }}</td>
-              <td>{{ case.product_name }}</td>
-              <td>{{ case.module_name }}</td>
-              <td><span class="priority-badge priority-{{ (case.priority or 'Medium')|lower }}">{{ case.priority or 'Medium' }}</span></td>
-              <td>
-                <form class="status-form" method="post" action="{{ url_for('update_testrun_status', project_id=project.id, test_case_id=case.case_id) }}">
-                  <select name="status" aria-label="更新 {{ case.case_title }} 狀態">
-                    {% for value in statuses %}
-                      <option value="{{ value }}" {% if case.status == value %}selected{% endif %}>{{ value }}</option>
-                    {% endfor %}
-                  </select>
-                  <button type="submit">更新</button>
-                </form>
-              </td>
-              <td>{{ case.updated_at or 'N/A' }}</td>
-              <td>
-                <button class="button preview-run-case-button" type="button" data-preview-case="{{ case.case_id }}">View</button>
-              </td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+
+  {% if grouped_cases %}
+    <div class="testrun-group-stack" id="testrun-group-stack">
+      {% for product in grouped_cases %}
+        <section class="testrun-product-group" data-product-group="{{ product.product_name }}">
+          <div class="testrun-product-header">
+            <div class="testrun-product-title-row">
+              <div class="panel-title">{{ product.product_name }}</div>
+              <span class="testrun-product-module-count">{{ product.modules|length }}_Module</span>
+            </div>
+          </div>
+          <div class="testrun-module-stack">
+            {% for module in product.modules %}
+              <details class="testrun-module-group" open data-module-group="{{ product.product_name }}::{{ module.module_name }}">
+                <summary class="testrun-module-summary">
+                  <span class="testrun-module-title-row">
+                    <span class="testrun-module-title">{{ module.module_name }}</span>
+                    <span class="testrun-module-count">{{ module.cases|length }}_Cases</span>
+                  </span>
+                </summary>
+                <div class="table-wrap">
+                  <table class="testrun-detail-table">
+                    <colgroup>
+                      <col class="testrun-column-case">
+                      <col class="testrun-column-product">
+                      <col class="testrun-column-module">
+                      <col class="testrun-column-priority">
+                      <col class="testrun-column-status">
+                      <col class="testrun-column-updated">
+                      <col class="testrun-column-actions">
+                    </colgroup>
+                    <thead>
+                      <tr>
+                        <th>Case</th>
+                        <th>Product/Version</th>
+                        <th>Module</th>
+                        <th>Priority</th>
+                        <th>Status</th>
+                        <th>Updated</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for case in module.cases %}
+                        <tr
+                          class="testrun-detail-case-row"
+                          data-case-row
+                          data-case-id="{{ case.case_id }}"
+                          data-case-title="{{ case.case_title|e }}"
+                          data-case-status="{{ case.status }}"
+                          data-product-name="{{ product.product_name|e }}"
+                          data-module-name="{{ module.module_name|e }}"
+                        >
+                          <td>{{ case.case_title }}</td>
+                          <td>{{ product.product_name }}</td>
+                          <td>{{ module.module_name }}</td>
+                          <td><span class="priority-badge priority-{{ (case.priority or 'Medium')|lower }}">{{ case.priority or 'Medium' }}</span></td>
+                          <td>
+                            <select
+                              class="testrun-status-select"
+                              name="status"
+                              aria-label="更新 {{ case.case_title }} 狀態"
+                              data-case-id="{{ case.case_id }}"
+                              data-original-status="{{ case.status }}"
+                            >
+                              {% for value in statuses %}
+                                <option value="{{ value }}" {% if case.status == value %}selected{% endif %}>{{ value }}</option>
+                              {% endfor %}
+                            </select>
+                          </td>
+                          <td data-updated-case="{{ case.case_id }}">{{ case.updated_at[:10] if case.updated_at else 'N/A' }}</td>
+                          <td>
+                            <button class="button preview-run-case-button" type="button" data-preview-case="{{ case.case_id }}">View</button>
+                          </td>
+                        </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              </details>
+            {% endfor %}
+          </div>
+        </section>
+      {% endfor %}
     </div>
   {% else %}
     <p class="empty-state">此 TestRun 尚未指定任何 TestCase</p>
   {% endif %}
+  <p class="empty-state is-hidden" id="testrun-filter-empty-state">沒有符合條件的 TestCase</p>
 </div>
 
 <div class="preview-overlay" id="run-preview-overlay"></div>
@@ -87,22 +165,64 @@
   </div>
   <div class="preview-drawer-content" id="run-preview-content"></div>
 </aside>
+
+<div class="modal-shell" id="testrun-update-modal" aria-hidden="true">
+  <div class="modal-overlay" data-close-testrun-update-modal></div>
+  <section class="modal-panel testrun-update-modal-panel" role="dialog" aria-modal="true" aria-labelledby="testrun-update-modal-title">
+    <div class="modal-header">
+      <h2 id="testrun-update-modal-title">Update Status</h2>
+      <button class="close-button" type="button" data-close-testrun-update-modal aria-label="關閉">×</button>
+    </div>
+    <div class="modal-content">
+      <div class="table-wrap">
+        <table class="testrun-update-preview-table">
+          <thead>
+            <tr>
+              <th>Case</th>
+              <th>Product/Version</th>
+            </tr>
+          </thead>
+          <tbody id="testrun-update-preview-body"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="button outline" type="button" data-close-testrun-update-modal>Cancel</button>
+      <button class="button testrun-update-button" id="confirm-testrun-status-update" type="button">Update</button>
+    </div>
+  </section>
+</div>
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/testrun_api.js') }}"></script>
 <script>
   (function () {
     var cases = {{ project.cases|tojson }};
     var casesById = {};
-    cases.forEach(function (caseItem) {
-      casesById[String(caseItem.case_id)] = caseItem;
-    });
-
+    var caseRows = Array.from(document.querySelectorAll('[data-case-row]'));
+    var moduleGroups = Array.from(document.querySelectorAll('[data-module-group]'));
+    var productGroups = Array.from(document.querySelectorAll('[data-product-group]'));
+    var statusSelects = Array.from(document.querySelectorAll('.testrun-status-select'));
     var overlay = document.getElementById('run-preview-overlay');
     var drawer = document.getElementById('run-preview-drawer');
     var previewTitle = document.getElementById('run-preview-title');
     var previewContent = document.getElementById('run-preview-content');
     var closeButton = document.getElementById('close-run-preview');
+    var projectId = {{ project.id }};
+    var saveButton = document.getElementById('save-testrun-statuses');
+    var statusFilter = document.getElementById('testrun-status-filter');
+    var filteredEmptyState = document.getElementById('testrun-filter-empty-state');
+    var updateModal = document.getElementById('testrun-update-modal');
+    var updatePreviewBody = document.getElementById('testrun-update-preview-body');
+    var confirmUpdateButton = document.getElementById('confirm-testrun-status-update');
+    var activeFilter = 'all';
+    var activePreviewCaseId = null;
+    var dirtyCaseIds = new Set();
+
+    cases.forEach(function (caseItem) {
+      casesById[String(caseItem.case_id)] = caseItem;
+    });
 
     function escapeHtml(value) {
       return String(value || '').replace(/[&<>"']/g, function (char) {
@@ -114,6 +234,10 @@
       return value ? value : 'N/A';
     }
 
+    function formatDate(value) {
+      return value ? String(value).slice(0, 10) : 'N/A';
+    }
+
     function renderPreview(caseItem) {
       previewTitle.textContent = caseItem.case_title || '預覽 TestCase';
       previewContent.innerHTML =
@@ -121,8 +245,7 @@
           '<div class="drawer-meta-grid">' +
             '<div class="drawer-meta-card"><span class="drawer-field-label">Product/Version</span><div class="drawer-field-value">' + escapeHtml(displayValue(caseItem.product_name)) + '</div></div>' +
             '<div class="drawer-meta-card"><span class="drawer-field-label">Module</span><div class="drawer-field-value">' + escapeHtml(displayValue(caseItem.module_name)) + '</div></div>' +
-            '<div class="drawer-meta-card"><span class="drawer-field-label">Priority</span><div class="drawer-field-value">' + escapeHtml(displayValue(caseItem.priority || 'Medium')) + '</div></div>' +
-            '<div class="drawer-meta-card"><span class="drawer-field-label">Status</span><div class="drawer-field-value">' + escapeHtml(displayValue(caseItem.status)) + '</div></div>' +
+            '<div class="drawer-meta-card drawer-meta-card-wide"><span class="drawer-field-label">Priority</span><div class="drawer-field-value">' + escapeHtml(displayValue(caseItem.priority || 'Medium')) + '</div></div>' +
           '</div>' +
           '<div class="drawer-content-stack">' +
             '<div class="drawer-content-card"><span class="drawer-field-label">Preconditions</span><div class="drawer-field-value preserve-wrap">' + escapeHtml(displayValue(caseItem.preconditions)) + '</div></div>' +
@@ -137,6 +260,7 @@
       if (!caseItem) {
         return;
       }
+      activePreviewCaseId = String(caseItem.case_id);
       renderPreview(caseItem);
       overlay.classList.add('active');
       drawer.classList.add('active');
@@ -147,7 +271,240 @@
       overlay.classList.remove('active');
       drawer.classList.remove('active');
       drawer.setAttribute('aria-hidden', 'true');
+      activePreviewCaseId = null;
     }
+
+    function updateProgress(projectData) {
+      var percent = projectData.progress_percent;
+      var track = document.getElementById('detail-progress-track');
+      document.getElementById('detail-progress-percent').textContent = percent + '%';
+      track.setAttribute('aria-label', 'Progress ' + percent + '%');
+      track.querySelector('span').style.width = percent + '%';
+    }
+
+    function updatePassRate(projectData) {
+      var container = document.getElementById('detail-pass-rate-value');
+      var percentElement = document.getElementById('detail-pass-rate-percent');
+      var percent = projectData.pass_rate_percent;
+      var track = document.getElementById('detail-pass-rate-track');
+
+      if (percent === null || percent === undefined) {
+        if (track) {
+          track.remove();
+        }
+        container.classList.add('testrun-metric-value-empty');
+        percentElement.textContent = 'N/A';
+        return;
+      }
+
+      if (!track) {
+        track = document.createElement('div');
+        track.className = 'progress-track';
+        track.id = 'detail-pass-rate-track';
+        track.appendChild(document.createElement('span'));
+        container.insertBefore(track, percentElement);
+      }
+      container.classList.remove('testrun-metric-value-empty');
+      track.setAttribute('aria-label', 'Pass Rate ' + percent + '%');
+      track.querySelector('span').style.width = percent + '%';
+      percentElement.textContent = percent + '%';
+    }
+
+    function updateStatusCounts(projectData) {
+      ['pending', 'in_progress', 'passed', 'failed', 'blocked', 'skipped', 'retest'].forEach(function (name) {
+        var element = document.querySelector('[data-status-count="' + name + '"]');
+        element.textContent = projectData[name + '_count'];
+      });
+    }
+
+    function updateSummary(projectData) {
+      updateProgress(projectData);
+      updatePassRate(projectData);
+      updateStatusCounts(projectData);
+    }
+
+    function updateDirtySummary() {
+      saveButton.textContent = 'Update';
+      saveButton.disabled = dirtyCaseIds.size === 0;
+    }
+
+    function openUpdateModal() {
+      if (!dirtyCaseIds.size) {
+        return;
+      }
+      updatePreviewBody.innerHTML = Array.from(dirtyCaseIds).map(function (caseId) {
+        var caseItem = casesById[caseId] || {};
+        var row = document.querySelector('[data-case-row][data-case-id="' + caseId + '"]');
+        return '<tr>' +
+          '<td>' + escapeHtml(displayValue(caseItem.case_title)) + '</td>' +
+          '<td>' + escapeHtml(displayValue(row ? row.dataset.productName : caseItem.product_name)) + '</td>' +
+        '</tr>';
+      }).join('');
+      updateModal.classList.add('active');
+      updateModal.setAttribute('aria-hidden', 'false');
+    }
+
+    function closeUpdateModal() {
+      updateModal.classList.remove('active');
+      updateModal.setAttribute('aria-hidden', 'true');
+    }
+
+    function syncRowState(caseItem) {
+      casesById[String(caseItem.case_id)] = caseItem;
+      var row = document.querySelector('[data-case-row][data-case-id="' + caseItem.case_id + '"]');
+      if (!row) {
+        return;
+      }
+      var select = row.querySelector('.testrun-status-select');
+      select.value = caseItem.status;
+      select.dataset.originalStatus = caseItem.status;
+      row.dataset.caseStatus = caseItem.status;
+      row.classList.remove('is-dirty');
+      dirtyCaseIds.delete(String(caseItem.case_id));
+      var updatedCell = document.querySelector('[data-updated-case="' + caseItem.case_id + '"]');
+      if (updatedCell) {
+        updatedCell.textContent = formatDate(caseItem.updated_at);
+      }
+      if (activePreviewCaseId === String(caseItem.case_id)) {
+        renderPreview(caseItem);
+      }
+    }
+
+    function applyFilters() {
+      var visibleCount = 0;
+      caseRows.forEach(function (row) {
+        var status = row.dataset.caseStatus;
+        var matchesStatus = activeFilter === 'all' || status === activeFilter;
+        var visible = matchesStatus;
+        row.classList.toggle('is-hidden', !visible);
+        if (visible) {
+          visibleCount += 1;
+        }
+      });
+
+      moduleGroups.forEach(function (moduleGroup) {
+        var visibleRows = moduleGroup.querySelectorAll('[data-case-row]:not(.is-hidden)').length;
+        moduleGroup.classList.toggle('is-hidden', visibleRows === 0);
+      });
+
+      productGroups.forEach(function (productGroup) {
+        var visibleModules = productGroup.querySelectorAll('[data-module-group]:not(.is-hidden)').length;
+        productGroup.classList.toggle('is-hidden', visibleModules === 0);
+      });
+
+      if (filteredEmptyState) {
+        filteredEmptyState.classList.toggle('is-hidden', !(caseRows.length && visibleCount === 0));
+      }
+    }
+
+    async function refreshProject(projectData) {
+      updateSummary(projectData);
+      (projectData.cases || []).forEach(function (caseItem) {
+        var row = document.querySelector('[data-case-row][data-case-id="' + caseItem.case_id + '"]');
+        if (!row) {
+          return;
+        }
+        var select = row.querySelector('.testrun-status-select');
+        if (!dirtyCaseIds.has(String(caseItem.case_id))) {
+          select.value = caseItem.status;
+          select.dataset.originalStatus = caseItem.status;
+          row.dataset.caseStatus = caseItem.status;
+          row.classList.remove('is-dirty');
+        }
+        var updatedCell = document.querySelector('[data-updated-case="' + caseItem.case_id + '"]');
+        if (updatedCell) {
+          updatedCell.textContent = formatDate(caseItem.updated_at);
+        }
+        casesById[String(caseItem.case_id)] = caseItem;
+      });
+      updateDirtySummary();
+      applyFilters();
+    }
+
+    async function saveDirtyStatuses() {
+      var dirtyIds = Array.from(dirtyCaseIds);
+      if (!dirtyIds.length) {
+        return;
+      }
+
+      saveButton.disabled = true;
+      confirmUpdateButton.disabled = true;
+      confirmUpdateButton.textContent = 'Updating...';
+
+      var settled = await Promise.allSettled(dirtyIds.map(function (caseId) {
+        var row = document.querySelector('[data-case-row][data-case-id="' + caseId + '"]');
+        var select = row.querySelector('.testrun-status-select');
+        return window.testrunApi.updateStatus(projectId, Number(caseId), select.value);
+      }));
+
+      var successCount = 0;
+      var failureMessages = [];
+
+      settled.forEach(function (result, index) {
+        var caseId = dirtyIds[index];
+        if (result.status === 'fulfilled') {
+          syncRowState(result.value);
+          successCount += 1;
+          return;
+        }
+        failureMessages.push('#' + caseId + ' ' + (result.reason && result.reason.message ? result.reason.message : String(result.reason)));
+      });
+
+      var projectData = await window.testrunApi.get(projectId);
+      refreshProject(projectData);
+
+      if (failureMessages.length) {
+        confirmUpdateButton.disabled = false;
+        confirmUpdateButton.textContent = 'Update';
+        window.showToast('部分變更保存失敗：' + failureMessages.join('； '), 'error', 'top-center');
+        return;
+      }
+      closeUpdateModal();
+      confirmUpdateButton.disabled = false;
+      confirmUpdateButton.textContent = 'Update';
+      window.showToast('已保存 ' + successCount + ' 筆變更', 'success', 'top-center');
+    }
+
+    statusSelects.forEach(function (select) {
+      select.addEventListener('change', function () {
+        var caseId = String(select.dataset.caseId);
+        var row = document.querySelector('[data-case-row][data-case-id="' + caseId + '"]');
+        var isDirty = select.value !== select.dataset.originalStatus;
+        row.dataset.caseStatus = select.value;
+        row.classList.toggle('is-dirty', isDirty);
+        if (isDirty) {
+          dirtyCaseIds.add(caseId);
+        } else {
+          dirtyCaseIds.delete(caseId);
+        }
+        updateDirtySummary();
+      });
+    });
+
+    statusFilter.addEventListener('change', function () {
+      var nextFilter = statusFilter.value;
+      if (nextFilter === activeFilter) {
+        return;
+      }
+      activeFilter = nextFilter;
+      applyFilters();
+    });
+
+    saveButton.addEventListener('click', function () {
+      openUpdateModal();
+    });
+
+    confirmUpdateButton.addEventListener('click', function () {
+      saveDirtyStatuses().catch(function (error) {
+        confirmUpdateButton.disabled = false;
+        confirmUpdateButton.textContent = 'Update';
+        window.showToast('保存變更失敗：' + error.message, 'error', 'top-center');
+      });
+    });
+
+    document.querySelectorAll('[data-close-testrun-update-modal]').forEach(function (element) {
+      element.addEventListener('click', closeUpdateModal);
+    });
 
     document.querySelectorAll('[data-preview-case]').forEach(function (button) {
       button.addEventListener('click', function () {
@@ -157,6 +514,15 @@
 
     closeButton.addEventListener('click', closePreview);
     overlay.addEventListener('click', closePreview);
+
+    window.testrunApi.get(projectId).then(function (projectData) {
+      refreshProject(projectData);
+    }).catch(function (error) {
+      window.showToast('載入 TestRun Detail 失敗：' + error.message, 'error');
+    });
+
+    updateDirtySummary();
+    applyFilters();
   })();
 </script>
 {% endblock %}

@@ -12,6 +12,7 @@ mindmap
   root((TestCase 管理系統))
     已完成功能
       Product/Version 管理
+        項目列表標題使用灰底並垂直置中
         瀏覽 Product/Version 清單
         新增 Product/Version
         修改 Product/Version
@@ -19,6 +20,9 @@ mindmap
         搜尋 Product/Version
         進入 Module/TestCase 頁面
       Module 管理
+        Module 摺疊標題使用加深灰底
+        Module 卡片支援展開與摺疊
+        Module 標題操作區垂直置中並使用淺灰底色
         依 Product/Version 顯示 Module
         新增 Module
         修改 Module 名稱
@@ -26,6 +30,11 @@ mindmap
         刪除 Module 時同步刪除底下 TestCase
         無 Module 時停用新增 TestCase
       TestCase 管理
+        Header 查詢 TestCase
+        搜尋結果以 Fetch API 載入
+        依 Product/Version 與 Module 歸類
+        同 Location 依建立時間排序
+        支援 20 50 100 筆後端分頁
         依 Module 顯示 TestCase 清單
         新增 TestCase
         修改 TestCase
@@ -34,6 +43,7 @@ mindmap
         側邊面板編輯 TestCase
         顯示 Case
         顯示 Priority
+        Priority 支援 Critical
         顯示 Remark
         顯示 Update 日期
       API 與系統工具
@@ -45,20 +55,48 @@ mindmap
         TestRun API
         Admin Reset API
       TestRun 管理
+        主頁與明細摺疊標題使用加深灰底
         主導覽入口
         瀏覽 TestRun 列表
+        以 Fetch API 載入 TestRun 列表與相關頁面資料
         依月份分段顯示 TestRun
         顯示月份 TestRun 數量
+        本月無資料時顯示浮動的 0_TestRun 建立區
+        僅本月份提供新增 TestRun 入口
+        頁面停留跨月時自動更新本月份
+        有資料月份支援展開與摺疊
+        當月預設展開且歷史月份預設收合
         顯示進度百分比
-        顯示狀態統計
+        顯示 Pass Rate
+        主頁 Actions 提供 Delete
+        各月份列表使用固定欄寬對齊
+        主頁 Created_Time 顯示日期
+        主頁 Created_Time 日期置中
         以加號入口建立 TestRun
+        TestRun 名稱允許重複
+        TestRun API 支援指定歷史建立時間
+        以 Fetch API 建立 TestRun
         依 Product/Version 選擇 TestCase
         以 View 按鈕預覽 TestCase
         勾選 TestCase 不開啟預覽
         更新執行狀態
+        以 Fetch API 即時更新執行狀態與摘要
         查看 TestRun 明細
+        明細以 Product/Version > Module 分組摺疊顯示
+        明細以下拉選單篩選執行狀態
+        明細集中預覽並 Update 已變更狀態
+        Product Version 標題顯示 N_Module
+        Module 摺疊表格支援水平捲動
+        Module 摺疊表格欄位對齊並顯示展開箭頭與 N_Cases
+        明細顯示七種執行狀態
+        明細摘要顯示 Progress 與 Pass Rate
+        明細摘要顯示七種狀態數量
+        明細 Updated 顯示日期
         產出 HTML Report
+        建立時保存 TestCase 完整快照
+        來源 TestCase 修改或刪除不影響既有 TestRun
       資料庫與設定
+        全站頁面使用淺灰背景
         SQLite 資料庫
         testcase_manager.db
         自動建立資料表
