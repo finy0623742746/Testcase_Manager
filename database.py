@@ -44,6 +44,7 @@ def _ensure_sqlite_columns():
                 'ALTER TABLE testruns ADD COLUMN created_at TIMESTAMP',
                 "UPDATE testruns SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL",
             ),
+            'release_at': ('ALTER TABLE testruns ADD COLUMN release_at TIMESTAMP', None),
         },
         'testrun_test_cases': {
             'case_title': ('ALTER TABLE testrun_test_cases ADD COLUMN case_title VARCHAR(256)', None),
@@ -205,14 +206,15 @@ def _migrate_testrun_duplicate_names():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name VARCHAR(128) NOT NULL,
                 description TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                release_at TIMESTAMP
             )'''
         )
         conn.execute(
             '''INSERT INTO testruns_duplicate_name_migration (
-                id, name, description, created_at
+                id, name, description, created_at, release_at
             )
-            SELECT id, name, description, created_at
+            SELECT id, name, description, created_at, release_at
             FROM testruns'''
         )
         conn.execute('DROP TABLE testruns')
@@ -279,7 +281,8 @@ def initialize_schema():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name VARCHAR(128) NOT NULL,
             description TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            release_at TIMESTAMP
         )''',
         '''CREATE TABLE IF NOT EXISTS testrun_test_cases (
             id INTEGER PRIMARY KEY AUTOINCREMENT,

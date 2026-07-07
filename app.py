@@ -1,3 +1,4 @@
+import math
 import os
 
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_from_directory
@@ -58,31 +59,85 @@ def _group_testrun_cases(cases):
     return grouped
 
 
-def _testrun_local_datetime(created_at):
-    if not created_at:
+def _parse_db_datetime(value):
+    if value is None or value == '':
         return None
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        try:
+            return datetime.fromtimestamp(value / 1000, timezone.utc)
+        except (OverflowError, OSError, ValueError):
+            return None
     try:
-        value = datetime.fromisoformat(created_at)
+        parsed = datetime.fromisoformat(str(value))
     except (TypeError, ValueError):
         return None
-    if value.tzinfo is None:
-        value = value.replace(tzinfo=timezone.utc)
-    return value.astimezone(TAIPEI_TIMEZONE)
-
-
-def _normalize_api_datetime(value):
-    if not isinstance(value, str) or not value.strip():
-        raise ValueError('created_at must be an ISO 8601 date-time with timezone')
-    normalized = value.strip()
-    if normalized.endswith(('Z', 'z')):
-        normalized = normalized[:-1] + '+00:00'
-    try:
-        parsed = datetime.fromisoformat(normalized)
-    except ValueError as error:
-        raise ValueError('created_at must be a valid ISO 8601 date-time') from error
     if parsed.tzinfo is None:
-        raise ValueError('created_at timezone is required')
-    return parsed.astimezone(timezone.utc).replace(tzinfo=None).strftime('%Y-%m-%d %H:%M:%S')
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+def _testrun_local_datetime(created_at):
+    value = _parse_db_datetime(created_at)
+    return value.astimezone(TAIPEI_TIMEZONE) if value else None
+
+
+def _db_datetime_to_timestamp_ms(value):
+    parsed = _parse_db_datetime(value)
+    if not parsed:
+        return None
+    return int(parsed.astimezone(timezone.utc).timestamp() * 1000)
+
+
+def _timestamp_ms_to_db_datetime(value, field_name):
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f'{field_name} must be a Unix timestamp in milliseconds')
+    if not math.isfinite(value) or value < 0:
+        raise ValueError(f'{field_name} must be a valid Unix timestamp in milliseconds')
+    try:
+        parsed = datetime.fromtimestamp(value / 1000, timezone.utc)
+    except (OverflowError, OSError, ValueError) as error:
+        raise ValueError(f'{field_name} must be a valid Unix timestamp in milliseconds') from error
+    return parsed.replace(tzinfo=None).strftime('%Y-%m-%d %H:%M:%S')
+
+
+def _taipei_today():
+    return datetime.now(TAIPEI_TIMEZONE).date()
+
+
+def _release_date_from_db_datetime(value):
+    parsed = _parse_db_datetime(value)
+    return parsed.astimezone(TAIPEI_TIMEZONE).date() if parsed else None
+
+
+def _release_date_to_db_datetime(value):
+    if not value:
+        return None
+    try:
+        parsed = datetime.strptime(value, '%Y-%m-%d')
+    except (TypeError, ValueError) as error:
+        raise ValueError('release_date must be a valid date') from error
+    local_release = parsed.replace(tzinfo=TAIPEI_TIMEZONE)
+    return local_release.astimezone(timezone.utc).replace(tzinfo=None).strftime('%Y-%m-%d %H:%M:%S')
+
+
+def _validate_release_not_past(release_at):
+    release_date = _release_date_from_db_datetime(release_at)
+    if release_date and release_date < _taipei_today():
+        raise ValueError('Release 不可小於當下日期')
+
+
+def _serialize_api_timestamps(value):
+    if isinstance(value, list):
+        return [_serialize_api_timestamps(item) for item in value]
+    if isinstance(value, dict):
+        serialized = {}
+        for key, item in value.items():
+            if key.endswith('_at'):
+                serialized[key] = _db_datetime_to_timestamp_ms(item)
+            else:
+                serialized[key] = _serialize_api_timestamps(item)
+        return serialized
+    return value
 
 
 @app.route('/')
@@ -196,8 +251,10 @@ def testruns():
     for project in all_projects:
         created_at = project.get('created_at') or ''
         local_created_at = _testrun_local_datetime(created_at)
+        local_release_at = _testrun_local_datetime(project.get('release_at') or '')
         month_key = local_created_at.strftime('%Y-%m') if local_created_at else ''
         project['created_date'] = local_created_at.strftime('%Y-%m-%d') if local_created_at else None
+        project['release_date'] = local_release_at.strftime('%Y-%m-%d') if local_release_at else None
         if month_key:
             if month_key not in groups_by_month:
                 groups_by_month[month_key] = []
@@ -234,12 +291,18 @@ def testruns():
 def new_testrun():
     project_name = request.form.get('project_name', '').strip()
     description = request.form.get('description', '').strip()
+    release_date = request.form.get('release_date', '').strip()
     test_case_ids = request.form.getlist('test_case_ids')
     if not project_name:
         flash('專案名稱為必填', 'error')
     else:
-        Project.create(project_name, description, [int(id_) for id_ in test_case_ids])
-        flash('TestRun 已建立', 'success')
+        try:
+            release_at = _release_date_to_db_datetime(release_date)
+            _validate_release_not_past(release_at)
+            Project.create(project_name, description, [int(id_) for id_ in test_case_ids], release_at=release_at)
+            flash('TestRun 已建立', 'success')
+        except ValueError as error:
+            flash(str(error), 'error')
     return redirect(url_for('testruns'))
 
 @app.route('/testruns/<int:project_id>')
@@ -248,6 +311,10 @@ def testrun_detail(project_id):
     if not project:
         flash('找不到指定 TestRun', 'error')
         return redirect(url_for('testruns'))
+    local_created_at = _testrun_local_datetime(project.get('created_at') or '')
+    local_release_at = _testrun_local_datetime(project.get('release_at') or '')
+    project['created_date'] = local_created_at.strftime('%Y-%m-%d') if local_created_at else None
+    project['release_date'] = local_release_at.strftime('%Y-%m-%d') if local_release_at else None
     return render_template(
         'project_detail.html',
         project=project,
@@ -261,6 +328,10 @@ def testrun_report(project_id):
     if not project:
         flash('找不到指定 TestRun', 'error')
         return redirect(url_for('testruns'))
+    local_created_at = _testrun_local_datetime(project.get('created_at') or '')
+    local_release_at = _testrun_local_datetime(project.get('release_at') or '')
+    project['created_date'] = local_created_at.strftime('%Y-%m-%d') if local_created_at else None
+    project['release_date'] = local_release_at.strftime('%Y-%m-%d') if local_release_at else None
     return render_template('testrun_report.html', project=project)
 
 @app.route('/testruns/<int:project_id>/status/<int:test_case_id>', methods=['POST'])
@@ -316,7 +387,7 @@ def api_clear_cache():
 def api_list_products():
     try:
         products = Product.all()
-        return jsonify(products)
+        return jsonify(_serialize_api_timestamps(products))
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -328,7 +399,7 @@ def api_create_product():
             return jsonify({'error': 'name is required'}), 400
         product_id = Product.create(data['name'])
         product = Product.get(product_id)
-        return jsonify(product), 201
+        return jsonify(_serialize_api_timestamps(product)), 201
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -338,7 +409,7 @@ def api_get_product(product_id):
         product = Product.get(product_id)
         if not product:
             return jsonify({'error': 'Product not found'}), 404
-        return jsonify(product)
+        return jsonify(_serialize_api_timestamps(product))
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -350,7 +421,7 @@ def api_update_product(product_id):
             return jsonify({'error': 'name is required'}), 400
         Product.update(product_id, data['name'])
         product = Product.get(product_id)
-        return jsonify(product)
+        return jsonify(_serialize_api_timestamps(product))
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -367,7 +438,7 @@ def api_delete_product(product_id):
 def api_list_modules(product_id):
     try:
         modules = Module.by_product(product_id)
-        return jsonify(modules)
+        return jsonify(_serialize_api_timestamps(modules))
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -379,7 +450,7 @@ def api_create_module(product_id):
             return jsonify({'error': 'name is required'}), 400
         module_id = Module.get_or_create(product_id, data['name'])
         module = Module.get(module_id)
-        return jsonify(module), 201
+        return jsonify(_serialize_api_timestamps(module)), 201
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -389,7 +460,7 @@ def api_get_module(module_id):
         module = Module.get(module_id)
         if not module:
             return jsonify({'error': 'Module not found'}), 404
-        return jsonify(module)
+        return jsonify(_serialize_api_timestamps(module))
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -401,7 +472,7 @@ def api_update_module(module_id):
             return jsonify({'error': 'name is required'}), 400
         Module.update(module_id, data['name'])
         module = Module.get(module_id)
-        return jsonify(module)
+        return jsonify(_serialize_api_timestamps(module))
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -438,7 +509,7 @@ def api_list_testcases():
                 'message': 'TestCases retrieved successfully',
                 'count': len(cases),
                 'query': query,
-                'data': cases,
+                'data': _serialize_api_timestamps(cases),
                 'pagination': {
                     'page': page,
                     'per_page': per_page,
@@ -448,22 +519,22 @@ def api_list_testcases():
             }), 200
 
         cases = TestCase.all(query=query or None)
-        return jsonify({
+        return jsonify(_serialize_api_timestamps({
             'message': 'TestCases retrieved successfully',
             'count': len(cases),
             'query': query,
             'data': cases,
-        }), 200
+        })), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/testcases/hierarchy', methods=['GET'])
 def api_list_testcase_hierarchy():
     try:
-        return jsonify({
+        return jsonify(_serialize_api_timestamps({
             'message': 'TestCase hierarchy retrieved successfully',
             'data': TestCase.list_hierarchy(),
-        }), 200
+        })), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -485,7 +556,7 @@ def api_create_testcase():
         created_case = TestCase.get(case_id)
         return jsonify({
             'message': 'TestCase created successfully',
-            'data': created_case,
+            'data': _serialize_api_timestamps(created_case),
         }), 201
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -498,7 +569,7 @@ def api_get_testcase(case_id):
             return jsonify({'error': 'TestCase not found'}), 404
         return jsonify({
             'message': 'TestCase retrieved successfully',
-            'data': case,
+            'data': _serialize_api_timestamps(case),
         }), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -522,7 +593,7 @@ def api_update_testcase(case_id):
         case = TestCase.get(case_id)
         return jsonify({
             'message': 'TestCase updated successfully',
-            'data': case,
+            'data': _serialize_api_timestamps(case),
         }), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -540,7 +611,7 @@ def api_delete_testcase(case_id):
 def api_list_testruns():
     try:
         projects = Project.all()
-        return jsonify(projects)
+        return jsonify(_serialize_api_timestamps(projects))
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -552,10 +623,16 @@ def api_create_testrun():
             return jsonify({'error': 'name is required'}), 400
         try:
             created_at = (
-                _normalize_api_datetime(data['created_at'])
+                _timestamp_ms_to_db_datetime(data['created_at'], 'created_at')
                 if data.get('created_at') is not None
                 else None
             )
+            release_at = (
+                _timestamp_ms_to_db_datetime(data['release_at'], 'release_at')
+                if data.get('release_at') is not None
+                else None
+            )
+            _validate_release_not_past(release_at)
         except ValueError as error:
             return jsonify({'error': str(error)}), 400
         project_id = Project.create(
@@ -563,8 +640,9 @@ def api_create_testrun():
             data.get('description', ''),
             data.get('test_case_ids', []),
             created_at=created_at,
+            release_at=release_at,
         )
-        return jsonify(Project.get(project_id)), 201
+        return jsonify(_serialize_api_timestamps(Project.get(project_id))), 201
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -574,7 +652,7 @@ def api_get_testrun(project_id):
         project = Project.get(project_id)
         if not project:
             return jsonify({'error': 'TestRun not found'}), 404
-        return jsonify(project)
+        return jsonify(_serialize_api_timestamps(project))
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -584,9 +662,24 @@ def api_update_testrun(project_id):
         data = request.get_json()
         if not data or not data.get('name'):
             return jsonify({'error': 'name is required'}), 400
-        Project.update(project_id, data['name'], data.get('description', ''))
+        try:
+            if 'release_at' in data:
+                release_at = (
+                    _timestamp_ms_to_db_datetime(data['release_at'], 'release_at')
+                    if data['release_at'] is not None
+                    else None
+                )
+                _validate_release_not_past(release_at)
+            else:
+                current_project = Project.get(project_id)
+                if not current_project:
+                    return jsonify({'error': 'TestRun not found'}), 404
+                release_at = current_project.get('release_at')
+        except ValueError as error:
+            return jsonify({'error': str(error)}), 400
+        Project.update(project_id, data['name'], data.get('description', ''), release_at=release_at)
         project = Project.get(project_id)
-        return jsonify(project)
+        return jsonify(_serialize_api_timestamps(project))
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -612,7 +705,7 @@ def api_update_testrun_testcase_status(project_id, test_case_id):
         project = Project.get(project_id)
         for case in project.get('cases', []):
             if case['case_id'] == test_case_id:
-                return jsonify(case)
+                return jsonify(_serialize_api_timestamps(case))
         return jsonify({'error': 'TestCase not found in project'}), 404
     except Exception as e:
         return jsonify({'error': str(e)}), 500

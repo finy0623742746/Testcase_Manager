@@ -35,6 +35,12 @@
         <strong id="detail-pass-rate-percent">{{ project.pass_rate_percent if project.pass_rate_percent is not none else 'N/A' }}{% if project.pass_rate_percent is not none %}%{% endif %}</strong>
       </div>
     </div>
+    <div class="testrun-metric-section">
+      <span class="summary-label">Release</span>
+      <div class="testrun-metric-value testrun-release-metric-value">
+        <strong id="detail-release-date">{{ project.release_date or 'N/A' }}</strong>
+      </div>
+    </div>
   </div>
   <div class="summary-card testrun-status-card">
     <div class="testrun-status-item"><span class="summary-label">Pending</span><strong data-status-count="pending">{{ project.pending_count }}</strong></div>
@@ -49,8 +55,8 @@
 
 <div class="panel testrun-detail-panel">
   <div class="panel-heading testrun-detail-heading">
-    <div class="panel-title">TestCase 狀態</div>
-    <div class="testrun-detail-actions">
+    <div class="testrun-detail-titlebar">
+      <div class="panel-title">TestCase 狀態</div>
       <label class="testrun-status-filter">
         <select id="testrun-status-filter" aria-label="依狀態篩選 TestCase">
           <option value="all">All</option>
@@ -63,6 +69,8 @@
           <option value="Retest">Retest</option>
         </select>
       </label>
+    </div>
+    <div class="testrun-detail-actions">
       <button class="button testrun-update-button" id="save-testrun-statuses" type="button" disabled>Update</button>
     </div>
   </div>
@@ -235,7 +243,27 @@
     }
 
     function formatDate(value) {
-      return value ? String(value).slice(0, 10) : 'N/A';
+      if (value === null || value === undefined || value === '') {
+        return 'N/A';
+      }
+      if (typeof value === 'number') {
+        var date = new Date(value);
+        if (Number.isNaN(date.getTime())) {
+          return 'N/A';
+        }
+        var parts = new Intl.DateTimeFormat('en', {
+          timeZone: 'Asia/Taipei',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit'
+        }).formatToParts(date);
+        var values = {};
+        parts.forEach(function (part) {
+          values[part.type] = part.value;
+        });
+        return values.year + '-' + values.month + '-' + values.day;
+      }
+      return String(value).slice(0, 10);
     }
 
     function renderPreview(caseItem) {
@@ -321,6 +349,10 @@
       updateProgress(projectData);
       updatePassRate(projectData);
       updateStatusCounts(projectData);
+      var releaseDate = document.getElementById('detail-release-date');
+      if (releaseDate) {
+        releaseDate.textContent = formatDate(projectData.release_at);
+      }
     }
 
     function updateDirtySummary() {

@@ -579,9 +579,10 @@ components:
           type: string
           example: "產品A"
         created_at:
-          type: string
-          format: date-time
-          example: "2024-01-01T00:00:00"
+          type: integer
+          format: int64
+          description: Unix timestamp in milliseconds
+          example: 1704038400000
     ProductCreate:
       type: object
       required:
@@ -613,8 +614,9 @@ components:
           type: string
           example: "登入模組"
         created_at:
-          type: string
-          format: date-time
+          type: integer
+          format: int64
+          description: Unix timestamp in milliseconds
     ModuleCreate:
       type: object
       required:
@@ -667,11 +669,13 @@ components:
           enum: [Low, Medium, High, Critical]
           example: "High"
         created_at:
-          type: string
-          format: date-time
+          type: integer
+          format: int64
+          description: Unix timestamp in milliseconds
         updated_at:
-          type: string
-          format: date-time
+          type: integer
+          format: int64
+          description: Unix timestamp in milliseconds
     MessageResponse:
       type: object
       properties:
@@ -756,11 +760,13 @@ components:
                     priority:
                       type: string
                     created_at:
-                      type: string
-                      format: date-time
+                      type: integer
+                      format: int64
+                      description: Unix timestamp in milliseconds
                     updated_at:
-                      type: string
-                      format: date-time
+                      type: integer
+                      format: int64
+                      description: Unix timestamp in milliseconds
                     module_id:
                       type: integer
                     module_name:
@@ -836,8 +842,14 @@ components:
           type: string
           example: "這是測試專案"
         created_at:
-          type: string
-          format: date-time
+          type: integer
+          format: int64
+          description: Unix timestamp in milliseconds
+        release_at:
+          type: integer
+          format: int64
+          nullable: true
+          description: Unix timestamp in milliseconds
         total_count:
           type: integer
           example: 10
@@ -876,8 +888,14 @@ components:
         description:
           type: string
         created_at:
-          type: string
-          format: date-time
+          type: integer
+          format: int64
+          description: Unix timestamp in milliseconds
+        release_at:
+          type: integer
+          format: int64
+          nullable: true
+          description: Unix timestamp in milliseconds
         total_count:
           type: integer
         passed_count:
@@ -930,17 +948,17 @@ components:
         remark:
           type: string
         test_case_created_at:
-          type: string
-          format: date-time
-          description: 來源 TestCase 建立時間的快照
+          type: integer
+          format: int64
+          description: 來源 TestCase 建立時間快照的 Unix timestamp in milliseconds
         test_case_updated_at:
-          type: string
-          format: date-time
-          description: 建立 TestRun 時來源 TestCase 的最後更新時間
+          type: integer
+          format: int64
+          description: 建立 TestRun 時來源 TestCase 最後更新時間的 Unix timestamp in milliseconds
         updated_at:
-          type: string
-          format: date-time
-          description: TestRun 中此案例執行狀態的最後更新時間
+          type: integer
+          format: int64
+          description: TestRun 中此案例執行狀態最後更新時間的 Unix timestamp in milliseconds
     TestRunCreate:
       type: object
       description: 建立時會將選定 TestCase 的完整內容保存為不可變快照。
@@ -960,10 +978,16 @@ components:
             type: integer
           example: [1, 2, 3]
         created_at:
-          type: string
-          format: date-time
-          description: 選填。指定 TestRun 建立時間以建立歷史測試資料；必須包含時區，未提供時使用目前時間。
-          example: "2026-06-15T10:00:00+08:00"
+          type: integer
+          format: int64
+          description: 選填。指定 TestRun 建立時間的 Unix timestamp in milliseconds；未提供時使用目前時間。
+          example: 1781498400000
+        release_at:
+          type: integer
+          format: int64
+          nullable: true
+          description: 選填。Release 時間的 Unix timestamp in milliseconds。
+          example: 1781452800000
     TestRunUpdate:
       type: object
       properties:
@@ -971,6 +995,11 @@ components:
           type: string
         description:
           type: string
+        release_at:
+          type: integer
+          format: int64
+          nullable: true
+          description: Release 時間的 Unix timestamp in milliseconds。
 
     # Status Update
     StatusUpdate:

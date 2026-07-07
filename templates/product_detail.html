@@ -233,7 +233,27 @@
     }
 
     function formatDate(value) {
-      var normalized = (value == null ? '' : String(value)).trim();
+      if (value === null || value === undefined || value === '') {
+        return 'N/A';
+      }
+      if (typeof value === 'number') {
+        var date = new Date(value);
+        if (Number.isNaN(date.getTime())) {
+          return 'N/A';
+        }
+        var parts = new Intl.DateTimeFormat('en', {
+          timeZone: 'Asia/Taipei',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit'
+        }).formatToParts(date);
+        var values = {};
+        parts.forEach(function (part) {
+          values[part.type] = part.value;
+        });
+        return values.year + '-' + values.month + '-' + values.day;
+      }
+      var normalized = String(value).trim();
       return normalized ? normalized.slice(0, 10) : 'N/A';
     }
 

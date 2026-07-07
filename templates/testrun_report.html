@@ -32,7 +32,8 @@
   <div class="summary-card"><span class="summary-label">Failed</span><strong data-report-stat="failed">{{ project.failed_count }}</strong></div>
   <div class="summary-card"><span class="summary-label">In Progress</span><strong data-report-stat="in_progress">{{ project.in_progress_count }}</strong></div>
   <div class="summary-card"><span class="summary-label">Pending</span><strong data-report-stat="pending">{{ project.pending_count }}</strong></div>
-  <div class="summary-card"><span class="summary-label">Created</span><strong data-report-stat="created">{{ project.created_at or 'N/A' }}</strong></div>
+  <div class="summary-card"><span class="summary-label">Created</span><strong data-report-stat="created">{{ project.created_date or 'N/A' }}</strong></div>
+  <div class="summary-card"><span class="summary-label">Release</span><strong data-report-stat="release">{{ project.release_date or 'N/A' }}</strong></div>
 </section>
 
 <section class="panel report-section">
@@ -75,6 +76,30 @@
 {% block scripts %}
 <script src="{{ url_for('static', filename='js/testrun_api.js') }}"></script>
 <script>
+  function formatReportDate(value) {
+    if (value === null || value === undefined || value === '') {
+      return 'N/A';
+    }
+    if (typeof value === 'number') {
+      var date = new Date(value);
+      if (Number.isNaN(date.getTime())) {
+        return 'N/A';
+      }
+      var parts = new Intl.DateTimeFormat('en', {
+        timeZone: 'Asia/Taipei',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      }).formatToParts(date);
+      var values = {};
+      parts.forEach(function (part) {
+        values[part.type] = part.value;
+      });
+      return values.year + '-' + values.month + '-' + values.day;
+    }
+    return String(value).slice(0, 10);
+  }
+
   window.testrunApi.get({{ project.id }}).then(function (project) {
     document.getElementById('report-run-name').textContent = project.name;
     document.getElementById('report-run-description').textContent = project.description || '無描述';
@@ -84,7 +109,8 @@
     ['failed', 'in_progress', 'pending'].forEach(function (name) {
       document.querySelector('[data-report-stat="' + name + '"]').textContent = project[name + '_count'];
     });
-    document.querySelector('[data-report-stat="created"]').textContent = project.created_at || 'N/A';
+    document.querySelector('[data-report-stat="created"]').textContent = formatReportDate(project.created_at);
+    document.querySelector('[data-report-stat="release"]').textContent = formatReportDate(project.release_at);
     project.cases.forEach(function (caseItem) {
       var article = document.querySelector('[data-report-case="' + caseItem.case_id + '"]');
       if (!article) {
@@ -94,7 +120,7 @@
       status.className = 'status-badge status-' + caseItem.status.toLowerCase().replace(/ /g, '-');
       status.setAttribute('data-report-status', '');
       status.textContent = caseItem.status;
-      article.querySelector('[data-report-updated]').textContent = caseItem.updated_at || 'N/A';
+      article.querySelector('[data-report-updated]').textContent = formatReportDate(caseItem.updated_at);
     });
   }).catch(function (error) {
     window.showToast('載入 TestRun Report 失敗：' + error.message, 'error');

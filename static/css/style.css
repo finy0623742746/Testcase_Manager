@@ -1192,19 +1192,60 @@ th {
 }
 .testrun-list-column-progress,
 .testrun-list-column-pass-rate {
-  width: 21%;
+  width: 15%;
 }
 .testrun-list-column-created {
-  width: 14%;
+  width: 11%;
+}
+.testrun-list-column-release {
+  width: 12%;
 }
 .testrun-list-column-actions {
-  width: 21%;
+  width: 24%;
 }
 .testrun-detail-table {
   min-width: 1040px;
 }
 .text-center {
   text-align: center;
+}
+.testrun-release-cell {
+  padding-right: 0.35rem;
+}
+.testrun-release-cell > span,
+.testrun-release-cell > button {
+  vertical-align: middle;
+}
+.testrun-release-edit-button {
+  margin-left: 0.15rem;
+}
+.testrun-release-editor {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  width: 100%;
+}
+.testrun-release-editor input {
+  width: 122px;
+  min-width: 0;
+  padding: 0.5rem 0.45rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #0f172a;
+  font: inherit;
+}
+.testrun-release-save-button,
+.testrun-release-save-button.button {
+  min-height: 34px;
+  padding: 0.48rem 0.6rem;
+  border-radius: 10px;
+  font-size: 0.86rem;
+}
+.testrun-actions-cell {
+  padding-left: 0.35rem;
 }
 .table-link {
   color: #0f172a;
@@ -1216,10 +1257,10 @@ th {
 }
 .progress-cell {
   display: grid;
-  grid-template-columns: minmax(90px, 1fr) auto;
+  grid-template-columns: minmax(64px, 1fr) auto;
   align-items: center;
   gap: 0.65rem;
-  min-width: 150px;
+  min-width: 118px;
 }
 .progress-cell-empty {
   display: block;
@@ -1278,7 +1319,7 @@ th {
   text-transform: none;
 }
 .testrun-metric-card {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0;
 }
 .testrun-metric-section {
@@ -1293,7 +1334,7 @@ th {
   padding-left: 1.25rem;
 }
 .testrun-metric-section .summary-label {
-  font-size: 0.92rem;
+  font-size: 1.3rem;
 }
 .testrun-metric-value {
   display: grid;
@@ -1307,10 +1348,20 @@ th {
   font-size: 2rem;
 }
 .testrun-metric-value-empty {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
 }
 .testrun-metric-value-empty strong {
-  display: block;
+  text-align: left;
+}
+.testrun-release-metric-value {
+  display: flex;
+  justify-content: flex-start;
+  min-height: 32px;
+}
+.testrun-release-metric-value strong {
+  min-width: 0;
   text-align: left;
 }
 .testrun-status-card {
@@ -1325,7 +1376,7 @@ th {
   text-align: center;
 }
 .testrun-status-item .summary-label {
-  font-size: 0.9rem;
+  font-size: 1.3rem;
 }
 .testrun-status-item strong {
   font-size: 1.85rem;
@@ -1364,6 +1415,13 @@ th {
 }
 .testrun-detail-heading {
   align-items: center;
+}
+.testrun-detail-titlebar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 .testrun-detail-actions {
   display: flex;
@@ -1665,6 +1723,9 @@ th {
   min-height: 38px;
   padding: 0.55rem 0.85rem;
 }
+.testrun-actions {
+  justify-content: flex-start;
+}
 .testrun-modal-panel {
   width: min(1180px, calc(100vw - 2rem));
 }
@@ -1690,8 +1751,12 @@ th {
 }
 .testrun-form-grid {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 240px);
   gap: 0.85rem;
-  max-width: 760px;
+  max-width: 940px;
+}
+.testrun-description-field {
+  grid-column: 1 / -1;
 }
 .testrun-picker {
   display: grid;
@@ -1873,7 +1938,7 @@ th {
   font-size: 2rem;
 }
 .report-summary-grid {
-  grid-template-columns: repeat(5, minmax(120px, 1fr));
+  grid-template-columns: repeat(6, minmax(110px, 1fr));
 }
 .report-section h2 {
   margin-top: 0;

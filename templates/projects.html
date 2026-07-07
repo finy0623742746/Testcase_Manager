@@ -28,6 +28,7 @@
                 <col class="testrun-list-column-progress">
                 <col class="testrun-list-column-pass-rate">
                 <col class="testrun-list-column-created">
+                <col class="testrun-list-column-release">
                 <col class="testrun-list-column-actions">
               </colgroup>
               <thead>
@@ -35,13 +36,18 @@
                   <th>Name</th>
                   <th>Progress</th>
                   <th>Pass Rate</th>
-                  <th class="text-center">Created_Time</th>
+                  <th class="text-center">Created</th>
+                  <th class="text-center">Release</th>
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {% for project in group.projects %}
-                  <tr data-testrun-id="{{ project.id }}">
+                  <tr
+                    data-testrun-id="{{ project.id }}"
+                    data-testrun-name="{{ project.name|e }}"
+                    data-testrun-description="{{ (project.description or '')|e }}"
+                  >
                     <td><a class="table-link" href="{{ url_for('testrun_detail', project_id=project.id) }}">{{ project.name }}</a></td>
                     <td>
                       <div class="progress-cell">
@@ -62,7 +68,11 @@
                       </div>
                     </td>
                     <td class="text-center">{{ project.created_date or 'N/A' }}</td>
-                    <td>
+                    <td class="text-center testrun-release-cell" data-run-release data-run-release-value="{{ project.release_date or '' }}">
+                      <span data-run-release-label>{{ project.release_date or 'N/A' }}</span>
+                      <button class="icon-button product-edit-button testrun-release-edit-button" type="button" data-edit-testrun-release aria-label="修改 Release">✎</button>
+                    </td>
+                    <td class="testrun-actions-cell">
                       <div class="actions compact testrun-actions">
                         <a class="button testrun-action-button" href="{{ url_for('testrun_detail', project_id=project.id) }}">Detail</a>
                         <a class="button testrun-action-button" href="{{ url_for('testrun_report', project_id=project.id) }}">Report</a>
@@ -104,11 +114,15 @@
     <form method="post" action="{{ url_for('new_testrun') }}" id="testrun-form" data-create-api="{{ url_for('api_create_testrun') }}">
       <div class="modal-content testrun-modal-content">
         <div class="testrun-form-grid">
-          <div class="field-group">
+          <div class="field-group testrun-name-field">
             <label>TestRun 名稱 <span class="required-mark">*</span></label>
             <input name="project_name" required placeholder="例如：Release 1.2 Regression">
           </div>
-          <div class="field-group">
+          <div class="field-group testrun-release-field">
+            <label>Release</label>
+            <input type="date" name="release_date">
+          </div>
+          <div class="field-group testrun-description-field">
             <label>描述</label>
             <textarea name="description" rows="3" placeholder="輸入測試範圍或備註"></textarea>
           </div>
@@ -214,6 +228,7 @@
     var caseRows = document.querySelectorAll('.testrun-case-row');
     var submitButton = form.querySelector('button[type="submit"]');
     var testrunTables = document.querySelectorAll('.testrun-table');
+    var testrunCache = new Map();
     var pageCurrentMonthNode = document.querySelector('[data-page-current-month]');
     var currentMonthGroupTitle = document.querySelector('[data-current-month-group="true"] .testrun-month-title');
     var pageCurrentMonth = pageCurrentMonthNode.dataset.pageCurrentMonth ||
@@ -240,6 +255,133 @@
         values[part.type] = part.value;
       });
       return values.year + '-' + values.month;
+    }
+
+    function getTaipeiDate() {
+      var parts = new Intl.DateTimeFormat('en', {
+        timeZone: 'Asia/Taipei',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      }).formatToParts(new Date());
+      var values = {};
+      parts.forEach(function (part) {
+        values[part.type] = part.value;
+      });
+      return values.year + '-' + values.month + '-' + values.day;
+    }
+
+    function formatTimestampDate(value) {
+      if (value === null || value === undefined || value === '') {
+        return 'N/A';
+      }
+      var date = new Date(Number(value));
+      if (Number.isNaN(date.getTime())) {
+        return 'N/A';
+      }
+      var parts = new Intl.DateTimeFormat('en', {
+        timeZone: 'Asia/Taipei',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      }).formatToParts(date);
+      var values = {};
+      parts.forEach(function (part) {
+        values[part.type] = part.value;
+      });
+      return values.year + '-' + values.month + '-' + values.day;
+    }
+
+    function dateInputToTaipeiTimestamp(value) {
+      if (!value) {
+        return null;
+      }
+      var parts = value.split('-').map(Number);
+      if (parts.length !== 3 || parts.some(function (part) { return Number.isNaN(part); })) {
+        return null;
+      }
+      return Date.UTC(parts[0], parts[1] - 1, parts[2]) - (8 * 60 * 60 * 1000);
+    }
+
+    function renderReleaseDisplay(cell, value) {
+      var displayDate = formatTimestampDate(value);
+      cell.dataset.runReleaseValue = displayDate === 'N/A' ? '' : displayDate;
+      cell.innerHTML =
+        '<span data-run-release-label>' + escapeHtml(displayDate) + '</span>' +
+        '<button class="icon-button product-edit-button testrun-release-edit-button" type="button" data-edit-testrun-release aria-label="修改 Release">✎</button>';
+    }
+
+    function releaseEditValue(cell) {
+      var today = getTaipeiDate();
+      var currentValue = cell.dataset.runReleaseValue || '';
+      return currentValue && currentValue >= today ? currentValue : today;
+    }
+
+    function startReleaseEdit(row, cell) {
+      var today = getTaipeiDate();
+      var value = releaseEditValue(cell);
+      cell.innerHTML =
+        '<div class="testrun-release-editor">' +
+          '<input type="date" data-release-editor-input min="' + today + '" value="' + value + '">' +
+          '<button class="button testrun-release-save-button" type="button" data-save-testrun-release>Save</button>' +
+        '</div>';
+      var input = cell.querySelector('[data-release-editor-input]');
+      if (input) {
+        input.focus();
+      }
+    }
+
+    async function readTestrunForUpdate(testrunId, row) {
+      if (testrunCache.has(String(testrunId))) {
+        return testrunCache.get(String(testrunId));
+      }
+      var project = await window.testrunApi.get(testrunId);
+      testrunCache.set(String(testrunId), project);
+      return project || {
+        name: row.dataset.testrunName || '',
+        description: row.dataset.testrunDescription || ''
+      };
+    }
+
+    async function saveReleaseEdit(row, cell) {
+      var input = cell.querySelector('[data-release-editor-input]');
+      var saveButton = cell.querySelector('[data-save-testrun-release]');
+      var today = getTaipeiDate();
+      if (!input || !input.value) {
+        window.showToast('請選擇 Release 日期', 'error', 'top-center');
+        return;
+      }
+      if (input.value < today) {
+        input.min = today;
+        input.value = today;
+        window.showToast('Release 不可小於當下日期', 'error', 'top-center');
+        return;
+      }
+      var testrunId = row.dataset.testrunId;
+      var originalText = saveButton ? saveButton.textContent : '';
+      if (saveButton) {
+        saveButton.disabled = true;
+        saveButton.textContent = 'Saving...';
+      }
+      try {
+        var current = await readTestrunForUpdate(testrunId, row);
+        var updated = await window.testrunApi.update(testrunId, {
+          name: current.name || row.dataset.testrunName || '',
+          description: current.description || row.dataset.testrunDescription || '',
+          release_at: dateInputToTaipeiTimestamp(input.value)
+        });
+        testrunCache.set(String(testrunId), updated);
+        row.dataset.testrunName = updated.name || row.dataset.testrunName || '';
+        row.dataset.testrunDescription = updated.description || '';
+        renderReleaseDisplay(cell, updated.release_at);
+        window.showToast('Release 已更新', 'success', 'top-center');
+      } catch (error) {
+        if (saveButton) {
+          saveButton.disabled = false;
+          saveButton.textContent = originalText;
+        }
+        window.showToast('更新 Release 失敗：' + error.message, 'error', 'top-center');
+      }
     }
 
     function reloadIfMonthChanged() {
@@ -317,6 +459,7 @@
     function hydrateTestRunRows() {
       window.testrunApi.list().then(function (projects) {
         projects.forEach(function (project) {
+          testrunCache.set(String(project.id), project);
           var row = document.querySelector('[data-testrun-id="' + project.id + '"]');
           if (!row) {
             return;
@@ -325,6 +468,10 @@
           progressTrack.setAttribute('aria-label', 'Progress ' + project.progress_percent + '%');
           progressTrack.querySelector('span').style.width = project.progress_percent + '%';
           row.querySelector('[data-run-progress]').textContent = project.progress_percent + '%';
+          var releaseCell = row.querySelector('[data-run-release]');
+          if (releaseCell && !releaseCell.querySelector('[data-release-editor-input]')) {
+            renderReleaseDisplay(releaseCell, project.release_at);
+          }
 
           var passCell = row.querySelector('[data-run-pass-rate-cell]');
           var passValue = row.querySelector('[data-run-pass-rate]');
@@ -361,6 +508,14 @@
       modal.classList.add('active');
       modal.setAttribute('aria-hidden', 'false');
       var nameInput = form.querySelector('[name="project_name"]');
+      var releaseInput = form.querySelector('[name="release_date"]');
+      if (releaseInput) {
+        var today = getTaipeiDate();
+        releaseInput.min = today;
+        if (!releaseInput.value || releaseInput.value < today) {
+          releaseInput.value = today;
+        }
+      }
       if (nameInput) {
         nameInput.focus();
       }
@@ -438,6 +593,28 @@
 
     testrunTables.forEach(function (testrunTable) {
       testrunTable.addEventListener('click', function (event) {
+        var releaseEditButton = event.target.closest('[data-edit-testrun-release]');
+        if (releaseEditButton) {
+          event.preventDefault();
+          event.stopPropagation();
+          var editCell = releaseEditButton.closest('[data-run-release]');
+          var editRow = releaseEditButton.closest('[data-testrun-id]');
+          if (editCell && editRow) {
+            startReleaseEdit(editRow, editCell);
+          }
+          return;
+        }
+        var releaseSaveButton = event.target.closest('[data-save-testrun-release]');
+        if (releaseSaveButton) {
+          event.preventDefault();
+          event.stopPropagation();
+          var saveCell = releaseSaveButton.closest('[data-run-release]');
+          var saveRow = releaseSaveButton.closest('[data-testrun-id]');
+          if (saveCell && saveRow) {
+            saveReleaseEdit(saveRow, saveCell);
+          }
+          return;
+        }
         var deleteButton = event.target.closest('[data-delete-testrun]');
         if (!deleteButton) {
           return;
@@ -465,6 +642,15 @@
         window.showToast('請至少選擇一個 TestCase', 'error', 'top-center');
         return;
       }
+      var releaseInput = form.querySelector('[name="release_date"]');
+      var taipeiToday = getTaipeiDate();
+      if (releaseInput && releaseInput.value && releaseInput.value < taipeiToday) {
+        event.preventDefault();
+        releaseInput.value = taipeiToday;
+        releaseInput.min = taipeiToday;
+        window.showToast('Release 不可小於當下日期', 'error', 'top-center');
+        return;
+      }
 
       event.preventDefault();
       var selectedCaseIds = Array.from(form.querySelectorAll('input[name="test_case_ids"]:checked')).map(function (input) {
@@ -477,6 +663,7 @@
       window.testrunApi.create({
           name: name,
           description: form.querySelector('[name="description"]').value.trim(),
+          release_at: dateInputToTaipeiTimestamp(releaseInput.value),
           test_case_ids: selectedCaseIds
         })
         .then(function () {

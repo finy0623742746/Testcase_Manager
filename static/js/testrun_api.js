@@ -33,6 +33,10 @@ window.testrunApi = {
     method: 'POST',
     body: JSON.stringify(payload),
   }),
+  update: (id, payload) => requestJson(`/api/testruns/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  }),
   delete: (id) => requestJson(`/api/testruns/${id}`, {
     method: 'DELETE',
   }),

@@ -330,19 +330,22 @@ class Project:
         return project
 
     @staticmethod
-    def create(name, description, test_case_ids, created_at=None):
+    def create(name, description, test_case_ids, created_at=None, release_at=None):
         conn = get_connection()
         try:
-            if created_at is None:
-                cur = conn.execute(
-                    'INSERT INTO testruns (name, description) VALUES (?, ?)',
-                    (name, description),
-                )
-            else:
-                cur = conn.execute(
-                    'INSERT INTO testruns (name, description, created_at) VALUES (?, ?, ?)',
-                    (name, description, created_at),
-                )
+            columns = ['name', 'description']
+            values = [name, description]
+            if created_at is not None:
+                columns.append('created_at')
+                values.append(created_at)
+            if release_at is not None:
+                columns.append('release_at')
+                values.append(release_at)
+            placeholders = ', '.join('?' for _ in values)
+            cur = conn.execute(
+                f'INSERT INTO testruns ({", ".join(columns)}) VALUES ({placeholders})',
+                values,
+            )
             project_id = cur.lastrowid
             for tc_id in test_case_ids:
                 inserted = conn.execute(
@@ -374,10 +377,18 @@ class Project:
     def all():
         conn = get_connection()
         try:
-            cur = conn.execute('SELECT id, name, description, created_at FROM testruns ORDER BY created_at DESC')
+            cur = conn.execute(
+                'SELECT id, name, description, created_at, release_at FROM testruns ORDER BY created_at DESC'
+            )
             projects = []
             for row in cur.fetchall():
-                project = {'id': row[0], 'name': row[1], 'description': row[2], 'created_at': row[3]}
+                project = {
+                    'id': row[0],
+                    'name': row[1],
+                    'description': row[2],
+                    'created_at': row[3],
+                    'release_at': row[4],
+                }
                 case_cur = conn.execute(
                     'SELECT status FROM testrun_test_cases WHERE project_id = ?',
                     (project['id'],),
@@ -394,7 +405,10 @@ class Project:
     def get(project_id):
         conn = get_connection()
         try:
-            cur = conn.execute('SELECT id, name, description, created_at FROM testruns WHERE id = ?', (project_id,))
+            cur = conn.execute(
+                'SELECT id, name, description, created_at, release_at FROM testruns WHERE id = ?',
+                (project_id,),
+            )
             project = cur.fetchone()
             if not project:
                 return None
@@ -433,6 +447,7 @@ class Project:
                 'name': project[1],
                 'description': project[2],
                 'created_at': project[3],
+                'release_at': project[4],
                 'cases': cases,
             })
         finally:
@@ -450,10 +465,13 @@ class Project:
             conn.close()
 
     @staticmethod
-    def update(project_id, name, description):
+    def update(project_id, name, description, release_at=None):
         conn = get_connection()
         try:
-            conn.execute('UPDATE testruns SET name = ?, description = ? WHERE id = ?', (name, description, project_id))
+            conn.execute(
+                'UPDATE testruns SET name = ?, description = ?, release_at = ? WHERE id = ?',
+                (name, description, release_at, project_id),
+            )
         finally:
             conn.commit()
             conn.close()
