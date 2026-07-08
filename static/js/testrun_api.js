@@ -45,4 +45,13 @@ window.testrunApi = {
       method: 'PUT',
       body: JSON.stringify({ status }),
     }),
+  addTestCases: (testrunId, testCaseIds) =>
+    requestJson(`/api/testruns/${testrunId}/testcases`, {
+      method: 'POST',
+      body: JSON.stringify({ test_case_ids: testCaseIds }),
+    }),
+  removeTestCase: (testrunId, testCaseId) =>
+    requestJson(`/api/testruns/${testrunId}/testcases/${testCaseId}`, {
+      method: 'DELETE',
+    }),
 };

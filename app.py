@@ -1,7 +1,9 @@
 import math
 import os
+import re
+from io import BytesIO
 
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_from_directory
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_file, send_from_directory, abort
 from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
 from database import initialize_schema, reset_all_data
@@ -79,6 +81,305 @@ def _parse_db_datetime(value):
 def _testrun_local_datetime(created_at):
     value = _parse_db_datetime(created_at)
     return value.astimezone(TAIPEI_TIMEZONE) if value else None
+
+
+REPORT_STATUS_CONFIG = [
+    {'key': 'pending', 'label': 'Pending', 'class_name': 'status-pending', 'color': '#e2e8f0'},
+    {'key': 'in_progress', 'label': 'In Progress', 'class_name': 'status-in-progress', 'color': '#fde68a'},
+    {'key': 'passed', 'label': 'Passed', 'class_name': 'status-passed', 'color': '#bbf7d0'},
+    {'key': 'failed', 'label': 'Failed', 'class_name': 'status-failed', 'color': '#fecaca'},
+    {'key': 'blocked', 'label': 'Blocked', 'class_name': 'status-blocked', 'color': '#fed7aa'},
+    {'key': 'skipped', 'label': 'Skipped', 'class_name': 'status-skipped', 'color': '#cbd5e1'},
+    {'key': 'retest', 'label': 'Retest', 'class_name': 'status-retest', 'color': '#e9d5ff'},
+]
+
+
+def _build_report_status_summary(project):
+    total_count = project.get('total_count') or 0
+    cursor = 0.0
+    statuses = []
+    gradient_parts = []
+    for status in REPORT_STATUS_CONFIG:
+        count = project.get(f"{status['key']}_count") or 0
+        degrees = (count / total_count * 360) if total_count else 0
+        start = cursor
+        end = cursor + degrees
+        if count:
+            gradient_parts.append(f"{status['color']} {start:.3f}deg {end:.3f}deg")
+        cursor = end
+        statuses.append({
+            **status,
+            'count': count,
+            'percent': round((count / total_count * 100), 1) if total_count else 0,
+        })
+    if not gradient_parts:
+        gradient_parts.append('#e5e7eb 0deg 360deg')
+    return statuses, f"background: conic-gradient({', '.join(gradient_parts)});"
+
+
+def _safe_report_filename(project):
+    name = re.sub(r'[^A-Za-z0-9._-]+', '-', project.get('name') or '').strip('-')
+    suffix = f"-{name}" if name else ''
+    return f"testrun-report-{project.get('id')}{suffix}.pdf"
+
+
+def _report_display_date(project, key):
+    return project.get(f'{key}_date') or 'N/A'
+
+
+def _pdf_text(value):
+    if value is None or value == '':
+        return 'N/A'
+    return str(value).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+
+
+def _pdf_markup_text(value, cjk_font_name):
+    text = _pdf_text(value)
+    parts = []
+    cjk_buffer = []
+    for char in text:
+        if ord(char) > 127:
+            cjk_buffer.append(char)
+            continue
+        if cjk_buffer:
+            parts.append(f'<font name="{cjk_font_name}">{"".join(cjk_buffer)}</font>')
+            cjk_buffer = []
+        parts.append(char)
+    if cjk_buffer:
+        parts.append(f'<font name="{cjk_font_name}">{"".join(cjk_buffer)}</font>')
+    return ''.join(parts)
+
+
+def _register_pdf_cjk_font(pdfmetrics, TTFont, UnicodeCIDFont):
+    font_candidates = [
+        ('NotoSansTC', r'C:\Windows\Fonts\NotoSansTC-VF.ttf', 'ttf'),
+        ('MicrosoftJhengHei', r'C:\Windows\Fonts\msjh.ttc', 'ttf'),
+        ('STSong-Light', None, 'cid'),
+    ]
+    for font_name, font_path, font_type in font_candidates:
+        try:
+            pdfmetrics.getFont(font_name)
+            return font_name
+        except KeyError:
+            pass
+        try:
+            if font_type == 'ttf' and font_path and os.path.exists(font_path):
+                pdfmetrics.registerFont(TTFont(font_name, font_path))
+                return font_name
+            if font_type == 'cid':
+                pdfmetrics.registerFont(UnicodeCIDFont(font_name))
+                return font_name
+        except Exception:
+            continue
+    return 'Helvetica'
+
+
+def _build_report_donut(report_statuses, total_count, font_name):
+    from reportlab.graphics.charts.piecharts import Pie
+    from reportlab.graphics.shapes import Circle, Drawing, String
+    from reportlab.lib import colors
+
+    drawing = Drawing(130, 130)
+    slice_border_color = colors.HexColor('#f8fafc')
+    pie = Pie()
+    pie.x = 8
+    pie.y = 8
+    pie.width = 114
+    pie.height = 114
+    pie.sideLabels = 0
+    pie.simpleLabels = 0
+    pie.labels = ['' for _ in report_statuses]
+    active_statuses = [status for status in report_statuses if status['count']]
+    pie.data = [status['count'] for status in active_statuses] or [1]
+    for index, status in enumerate(active_statuses):
+        pie.slices[index].fillColor = colors.HexColor(status['color'])
+        pie.slices[index].strokeColor = slice_border_color
+        pie.slices[index].strokeWidth = 0.45
+    if not active_statuses:
+        pie.slices[0].fillColor = colors.HexColor('#e5e7eb')
+        pie.slices[0].strokeColor = slice_border_color
+        pie.slices[0].strokeWidth = 0.45
+    drawing.add(pie)
+    drawing.add(Circle(65, 65, 34, fillColor=colors.white, strokeColor=colors.white, strokeWidth=1))
+    drawing.add(String(65, 72, 'Total', textAnchor='middle', fontName='Helvetica-Bold', fontSize=8, fillColor=colors.HexColor('#64748b')))
+    drawing.add(String(65, 52, str(total_count), textAnchor='middle', fontName='Helvetica-Bold', fontSize=19, fillColor=colors.HexColor('#111827')))
+    return drawing
+
+
+def _build_testrun_report_pdf(project):
+    from reportlab.lib import colors
+    from reportlab.lib.enums import TA_CENTER, TA_RIGHT
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.units import mm
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+    from reportlab.pdfbase.ttfonts import TTFont
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
+    font_name = _register_pdf_cjk_font(pdfmetrics, TTFont, UnicodeCIDFont)
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=16 * mm,
+        leftMargin=16 * mm,
+        topMargin=14 * mm,
+        bottomMargin=14 * mm,
+        title='TestRun Report',
+    )
+    content_width = doc.width
+    styles = {
+        'title': ParagraphStyle('ReportTitle', fontName='Helvetica-Bold', fontSize=20, leading=24, textColor=colors.HexColor('#111827')),
+        'meta': ParagraphStyle('ReportMeta', fontName='Helvetica', fontSize=10.5, leading=13, alignment=TA_RIGHT, textColor=colors.HexColor('#475569')),
+        'run_name': ParagraphStyle('RunName', fontName='Helvetica-Bold', fontSize=16, leading=21, spaceAfter=4, textColor=colors.HexColor('#111827')),
+        'body': ParagraphStyle('ReportBody', fontName='Helvetica-Bold', fontSize=10.2, leading=14, textColor=colors.HexColor('#64748b')),
+        'section': ParagraphStyle('ReportSection', fontName='Helvetica-Bold', fontSize=20, leading=24, leftIndent=-3 * mm, spaceAfter=10, textColor=colors.HexColor('#111827')),
+        'product': ParagraphStyle('ReportProduct', fontName='Helvetica-Bold', fontSize=12, leading=15, spaceBefore=7, spaceAfter=5, textColor=colors.HexColor('#111827')),
+        'module': ParagraphStyle('ReportModule', fontName='Helvetica-Bold', fontSize=10, leading=13, spaceBefore=4, spaceAfter=4, textColor=colors.HexColor('#64748b')),
+        'table': ParagraphStyle('ReportTableText', fontName='Helvetica-Bold', fontSize=9, leading=12, textColor=colors.HexColor('#111827')),
+        'table_center': ParagraphStyle('ReportTableCenter', fontName='Helvetica-Bold', fontSize=8.8, leading=11.5, alignment=TA_CENTER, textColor=colors.HexColor('#111827')),
+        'badge_center': ParagraphStyle('ReportBadgeCenter', fontName='Helvetica-Bold', fontSize=8.6, leading=11, alignment=TA_CENTER, textColor=colors.HexColor('#111827')),
+        'head': ParagraphStyle('ReportTableHead', fontName='Helvetica-Bold', fontSize=9.2, leading=12, textColor=colors.HexColor('#475569')),
+        'head_center': ParagraphStyle('ReportTableHeadCenter', fontName='Helvetica-Bold', fontSize=9.2, leading=12, alignment=TA_CENTER, textColor=colors.HexColor('#475569')),
+    }
+    priority_colors = {
+        'low': ('#e0f2fe', '#075985'),
+        'medium': ('#fef3c7', '#92400e'),
+        'high': ('#fee2e2', '#991b1b'),
+        'critical': ('#fecaca', '#7f1d1d'),
+    }
+    status_colors = {
+        'pending': ('#e2e8f0', '#334155'),
+        'in progress': ('#dbeafe', '#1d4ed8'),
+        'passed': ('#dcfce7', '#166534'),
+        'failed': ('#fee2e2', '#991b1b'),
+        'blocked': ('#ffedd5', '#9a3412'),
+        'skipped': ('#f1f5f9', '#475569'),
+        'retest': ('#f3e8ff', '#7e22ce'),
+    }
+
+    def badge_text(value, palette):
+        label = _pdf_markup_text(value, font_name)
+        _background, text_color = palette
+        return Paragraph(f'<font color="{text_color}">{label}</font>', styles['badge_center'])
+
+    report_statuses, _chart_style = _build_report_status_summary(project)
+    grouped_cases = _group_testrun_cases(project.get('cases', []))
+    story = []
+    meta = f"Created {_report_display_date(project, 'created')} | Release {_report_display_date(project, 'release')}"
+    story.append(Table(
+        [[Paragraph('TestRun Report', styles['title']), Paragraph(_pdf_text(meta), styles['meta'])]],
+        colWidths=[content_width * 0.48, content_width * 0.52],
+        style=TableStyle([
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 0),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+            ('TOPPADDING', (0, 0), (-1, -1), 0),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+        ]),
+    ))
+    story.append(Spacer(1, 7 * mm))
+    story.append(Paragraph(_pdf_markup_text(project.get('name'), font_name), styles['run_name']))
+    story.append(Paragraph(_pdf_markup_text(project.get('description') or '無描述', font_name), styles['body']))
+    story.append(Spacer(1, 7 * mm))
+
+    donut = _build_report_donut(report_statuses, project.get('total_count') or 0, font_name)
+    legend_rows = []
+    legend_styles = [
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 2),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 2),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+    ]
+    for index, status in enumerate(report_statuses):
+        legend_rows.append(['', Paragraph(_pdf_markup_text(status['label'], font_name), styles['table']), Paragraph(str(status['count']), styles['table_center'])])
+        legend_styles.extend([
+            ('BACKGROUND', (0, index), (0, index), colors.HexColor(status['color'])),
+            ('BOX', (0, index), (0, index), 0, colors.HexColor(status['color'])),
+        ])
+    legend = Table(legend_rows, colWidths=[5 * mm, 36 * mm, 10 * mm], style=TableStyle(legend_styles))
+    status_summary_table = Table(
+        [[donut, '', legend]],
+        colWidths=[58 * mm, 12 * mm, 55 * mm],
+        style=TableStyle([
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 0),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+            ('TOPPADDING', (0, 0), (-1, -1), 0),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+        ]),
+    )
+    status_summary_table.hAlign = 'CENTER'
+    story.append(status_summary_table)
+    story.append(Spacer(1, 9 * mm))
+    story.append(Paragraph('TestCase Results', styles['section']))
+
+    if not grouped_cases:
+        story.append(Paragraph('此 TestRun 尚未指定任何 TestCase', styles['body']))
+    for product in grouped_cases:
+        story.append(Paragraph(_pdf_markup_text(product.get('product_name'), font_name), styles['product']))
+        for module in product.get('modules', []):
+            story.append(Paragraph(_pdf_markup_text(module.get('module_name'), font_name), styles['module']))
+            rows = [[
+                Paragraph('Case', styles['head']),
+                Paragraph('Priority', styles['head_center']),
+                Paragraph('Status', styles['head_center']),
+            ]]
+            table_styles = [
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#f8fafc')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor('#475569')),
+                ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#e5e7eb')),
+                ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#edf2f7')),
+                ('ALIGN', (1, 0), (2, -1), 'CENTER'),
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 6),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+                ('TOPPADDING', (0, 0), (-1, -1), 6),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ]
+            for case in module.get('cases', []):
+                row_index = len(rows)
+                priority = case.get('priority') or 'Medium'
+                status = case.get('status') or 'Pending'
+                priority_palette = priority_colors.get(str(priority).lower(), priority_colors['medium'])
+                status_palette = status_colors.get(str(status).lower(), status_colors['pending'])
+                rows.append([
+                    Paragraph(_pdf_markup_text(case.get('case_title'), font_name), styles['table']),
+                    badge_text(priority, priority_palette),
+                    badge_text(status, status_palette),
+                ])
+                table_styles.extend([
+                    ('BACKGROUND', (1, row_index), (1, row_index), colors.HexColor(priority_palette[0])),
+                    ('BACKGROUND', (2, row_index), (2, row_index), colors.HexColor(status_palette[0])),
+                    ('VALIGN', (1, row_index), (2, row_index), 'MIDDLE'),
+                ])
+            case_table_width = content_width - 6
+            case_table = Table(
+                rows,
+                colWidths=[case_table_width - 55 * mm, 25 * mm, 30 * mm],
+                repeatRows=1,
+                style=TableStyle(table_styles),
+            )
+            case_table.hAlign = 'LEFT'
+            story.append(Table(
+                [[case_table]],
+                colWidths=[content_width],
+                style=TableStyle([
+                    ('LEFTPADDING', (0, 0), (-1, -1), 6),
+                    ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+                    ('TOPPADDING', (0, 0), (-1, -1), 0),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+                ]),
+            ))
+            story.append(Spacer(1, 5 * mm))
+
+    doc.build(story)
+    buffer.seek(0)
+    return buffer
 
 
 def _db_datetime_to_timestamp_ms(value):
@@ -320,6 +621,8 @@ def testrun_detail(project_id):
         project=project,
         statuses=STATUS_VALUES,
         grouped_cases=_group_testrun_cases(project.get('cases', [])),
+        testcase_hierarchy=TestCase.list_hierarchy(),
+        existing_case_ids=[case.get('case_id') for case in project.get('cases', [])],
     )
 
 @app.route('/testruns/<int:project_id>/report')
@@ -332,7 +635,42 @@ def testrun_report(project_id):
     local_release_at = _testrun_local_datetime(project.get('release_at') or '')
     project['created_date'] = local_created_at.strftime('%Y-%m-%d') if local_created_at else None
     project['release_date'] = local_release_at.strftime('%Y-%m-%d') if local_release_at else None
-    return render_template('testrun_report.html', project=project)
+    report_statuses, report_chart_style = _build_report_status_summary(project)
+    report_back_url = (
+        url_for('testrun_detail', project_id=project_id)
+        if request.args.get('source') == 'detail'
+        else url_for('testruns')
+    )
+    return render_template(
+        'testrun_report.html',
+        project=project,
+        grouped_cases=_group_testrun_cases(project.get('cases', [])),
+        report_statuses=report_statuses,
+        report_chart_style=report_chart_style,
+        report_back_url=report_back_url,
+    )
+
+
+@app.route('/testruns/<int:project_id>/report.pdf')
+def testrun_report_pdf(project_id):
+    project = Project.get(project_id)
+    if not project:
+        abort(404)
+    local_created_at = _testrun_local_datetime(project.get('created_at') or '')
+    local_release_at = _testrun_local_datetime(project.get('release_at') or '')
+    project['created_date'] = local_created_at.strftime('%Y-%m-%d') if local_created_at else None
+    project['release_date'] = local_release_at.strftime('%Y-%m-%d') if local_release_at else None
+    try:
+        pdf_buffer = _build_testrun_report_pdf(project)
+    except ImportError:
+        app.logger.exception('reportlab is required to export TestRun report PDF')
+        return 'PDF export requires reportlab. Please install dependencies from requirements.txt.', 500
+    return send_file(
+        pdf_buffer,
+        mimetype='application/pdf',
+        as_attachment=False,
+        download_name=_safe_report_filename(project),
+    )
 
 @app.route('/testruns/<int:project_id>/status/<int:test_case_id>', methods=['POST'])
 def update_testrun_status(project_id, test_case_id):
@@ -707,6 +1045,36 @@ def api_update_testrun_testcase_status(project_id, test_case_id):
             if case['case_id'] == test_case_id:
                 return jsonify(_serialize_api_timestamps(case))
         return jsonify({'error': 'TestCase not found in project'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/testruns/<int:project_id>/testcases', methods=['POST'])
+def api_add_testrun_testcases(project_id):
+    try:
+        data = request.get_json()
+        test_case_ids = data.get('test_case_ids') if data else None
+        if not isinstance(test_case_ids, list) or not test_case_ids:
+            return jsonify({'error': 'test_case_ids is required'}), 400
+        try:
+            Project.add_test_cases(project_id, test_case_ids)
+        except LookupError:
+            return jsonify({'error': 'TestRun not found'}), 404
+        except ValueError as error:
+            return jsonify({'error': str(error)}), 400
+        return jsonify(_serialize_api_timestamps(Project.get(project_id)))
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/testruns/<int:project_id>/testcases/<int:test_case_id>', methods=['DELETE'])
+def api_delete_testrun_testcase(project_id, test_case_id):
+    try:
+        try:
+            Project.remove_test_case(project_id, test_case_id)
+        except LookupError:
+            return jsonify({'error': 'TestRun not found'}), 404
+        except ValueError as error:
+            return jsonify({'error': str(error)}), 404
+        return jsonify(_serialize_api_timestamps(Project.get(project_id)))
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

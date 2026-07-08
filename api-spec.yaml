@@ -505,6 +505,81 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /api/testruns/{id}/testcases:
+    post:
+      tags:
+        - TestRuns
+      summary: 追加 TestCase 至既有 TestRun
+      operationId: addTestRunTestCases
+      parameters:
+        - $ref: '#/components/parameters/TestRunId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TestRunAddTestCases'
+      responses:
+        '200':
+          description: TestCase 追加成功，回傳更新後 TestRun 明細
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestRunDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/testruns/{id}/testcases/{test_case_id}:
+    delete:
+      tags:
+        - TestRuns
+      summary: 從 TestRun 移除 TestCase 關聯
+      operationId: removeTestRunTestCase
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: TestRun ID
+          schema:
+            type: integer
+        - name: test_case_id
+          in: path
+          required: true
+          description: TestCase ID
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: TestCase 關聯移除成功，回傳更新後 TestRun 明細
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestRunDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /testruns/{id}/report.pdf:
+    get:
+      tags:
+        - TestRuns
+      summary: 下載 TestRun Report PDF
+      operationId: downloadTestRunReportPdf
+      description: 以伺服器端產生 TestRun Report PDF，避免瀏覽器列印頁眉頁腳與另存流程問題。
+      parameters:
+        - $ref: '#/components/parameters/TestRunId'
+      responses:
+        '200':
+          description: PDF 下載成功
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   /api/testruns/{testrun_id}/testcases/{test_case_id}/status:
     put:
       tags:
@@ -1000,6 +1075,18 @@ components:
           format: int64
           nullable: true
           description: Release 時間的 Unix timestamp in milliseconds。
+    TestRunAddTestCases:
+      type: object
+      required:
+        - test_case_ids
+      properties:
+        test_case_ids:
+          type: array
+          minItems: 1
+          items:
+            type: integer
+          description: 要追加至既有 TestRun 的 TestCase ID；既有項目不會重複新增。
+          example: [1, 2, 3]
 
     # Status Update
     StatusUpdate:

@@ -68,15 +68,19 @@ mindmap
         當月預設展開且歷史月份預設收合
         顯示進度百分比
         顯示 Pass Rate
+        Pass Rate 無進度時顯示 0%
         主頁 Actions 提供 Delete
         各月份列表使用固定欄寬對齊
         主頁 Created_Time 顯示日期
         主頁 Created_Time 日期置中
         以加號入口建立 TestRun
+        Release 編輯支援 Cancel 與 Save 文字操作
         TestRun 名稱允許重複
         TestRun API 支援指定歷史建立時間
         以 Fetch API 建立 TestRun
         依 Product/Version 選擇 TestCase
+        新增彈窗可 Select All 全選或取消全選 TestCase
+        新增彈窗底部操作顯示 Cancel 與 Save
         以 View 按鈕預覽 TestCase
         勾選 TestCase 不開啟預覽
         更新執行狀態
@@ -85,6 +89,9 @@ mindmap
         明細以 Product/Version > Module 分組摺疊顯示
         明細以下拉選單篩選執行狀態
         明細集中預覽並 Update 已變更狀態
+        明細可追加 TestCase
+        明細可移除既有 TestCase 關聯且不影響來源 TestCase
+        明細追加 TestCase 時既有項目以 Added 或 Cancel Added 壓黑標示
         Product Version 標題顯示 N_Module
         Module 摺疊表格支援水平捲動
         Module 摺疊表格欄位對齊並顯示展開箭頭與 N_Cases
@@ -93,6 +100,9 @@ mindmap
         明細摘要顯示七種狀態數量
         明細 Updated 顯示日期
         產出 HTML Report
+        Report 以 Total 甜甜圈圖呈現七種狀態數量
+        Report 以 Product/Version > Module 分組清單呈現 TestCase Results
+        Report TestCase Results 顯示 Title Priority Status
         建立時保存 TestCase 完整快照
         來源 TestCase 修改或刪除不影響既有 TestRun
       資料庫與設定

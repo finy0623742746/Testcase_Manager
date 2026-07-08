@@ -36,8 +36,8 @@
                   <th>Name</th>
                   <th>Progress</th>
                   <th>Pass Rate</th>
-                  <th class="text-center">Created</th>
-                  <th class="text-center">Release</th>
+                  <th>Created</th>
+                  <th>Release</th>
                   <th>Actions</th>
                 </tr>
               </thead>
@@ -58,17 +58,16 @@
                       </div>
                     </td>
                     <td>
-                      <div class="progress-cell{% if project.pass_rate_percent is none %} progress-cell-empty{% endif %}" data-run-pass-rate-cell>
-                        {% if project.pass_rate_percent is not none %}
-                          <div class="progress-track" data-run-pass-rate-track aria-label="Pass Rate {{ project.pass_rate_percent }}%">
-                            <span style="width: {{ project.pass_rate_percent }}%"></span>
-                          </div>
-                        {% endif %}
-                        <strong data-run-pass-rate>{{ project.pass_rate_percent if project.pass_rate_percent is not none else 'N/A' }}{% if project.pass_rate_percent is not none %}%{% endif %}</strong>
+                      {% set pass_rate = project.pass_rate_percent if project.pass_rate_percent is not none else 0 %}
+                      <div class="progress-cell" data-run-pass-rate-cell>
+                        <div class="progress-track" data-run-pass-rate-track aria-label="Pass Rate {{ pass_rate }}%">
+                          <span style="width: {{ pass_rate }}%"></span>
+                        </div>
+                        <strong data-run-pass-rate>{{ pass_rate }}%</strong>
                       </div>
                     </td>
-                    <td class="text-center">{{ project.created_date or 'N/A' }}</td>
-                    <td class="text-center testrun-release-cell" data-run-release data-run-release-value="{{ project.release_date or '' }}">
+                    <td>{{ project.created_date or 'N/A' }}</td>
+                    <td class="testrun-release-cell" data-run-release data-run-release-value="{{ project.release_date or '' }}">
                       <span data-run-release-label>{{ project.release_date or 'N/A' }}</span>
                       <button class="icon-button product-edit-button testrun-release-edit-button" type="button" data-edit-testrun-release aria-label="修改 Release">✎</button>
                     </td>
@@ -151,7 +150,7 @@
                 <strong>選擇 TestCase</strong>
                 <span id="selected-case-count">0 selected</span>
               </div>
-              <button class="button testrun-action-button" id="select-visible-cases" type="button">選取目前列表</button>
+              <button class="testrun-text-action" id="select-visible-cases" type="button">Select All</button>
             </div>
             <div class="testrun-case-list" id="testrun-case-list">
               {% set has_cases = namespace(value=false) %}
@@ -180,8 +179,8 @@
         </div>
       </div>
       <div class="modal-footer">
-        <button class="button outline" type="button" data-close-testrun-modal>取消</button>
-        <button class="button" type="submit">保存</button>
+        <button class="button outline" type="button" data-close-testrun-modal>Cancel</button>
+        <button class="button" type="submit">Save</button>
       </div>
     </form>
   </section>
@@ -275,6 +274,9 @@
       if (value === null || value === undefined || value === '') {
         return 'N/A';
       }
+      if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        return value;
+      }
       var date = new Date(Number(value));
       if (Number.isNaN(date.getTime())) {
         return 'N/A';
@@ -323,7 +325,8 @@
       cell.innerHTML =
         '<div class="testrun-release-editor">' +
           '<input type="date" data-release-editor-input min="' + today + '" value="' + value + '">' +
-          '<button class="button testrun-release-save-button" type="button" data-save-testrun-release>Save</button>' +
+          '<button class="testrun-text-action testrun-release-cancel-button" type="button" data-cancel-testrun-release>Cancel</button>' +
+          '<button class="testrun-text-action testrun-release-save-button" type="button" data-save-testrun-release>Save</button>' +
         '</div>';
       var input = cell.querySelector('[data-release-editor-input]');
       if (input) {
@@ -476,14 +479,9 @@
           var passCell = row.querySelector('[data-run-pass-rate-cell]');
           var passValue = row.querySelector('[data-run-pass-rate]');
           var passTrack = row.querySelector('[data-run-pass-rate-track]');
-          if (project.pass_rate_percent === null || project.pass_rate_percent === undefined) {
-            if (passTrack) {
-              passTrack.remove();
-            }
-            passCell.classList.add('progress-cell-empty');
-            passValue.textContent = 'N/A';
-            return;
-          }
+          var passRatePercent = project.pass_rate_percent === null || project.pass_rate_percent === undefined
+            ? 0
+            : project.pass_rate_percent;
           if (!passTrack) {
             passTrack = document.createElement('div');
             passTrack.className = 'progress-track';
@@ -492,9 +490,9 @@
             passCell.insertBefore(passTrack, passValue);
           }
           passCell.classList.remove('progress-cell-empty');
-          passTrack.setAttribute('aria-label', 'Pass Rate ' + project.pass_rate_percent + '%');
-          passTrack.querySelector('span').style.width = project.pass_rate_percent + '%';
-          passValue.textContent = project.pass_rate_percent + '%';
+          passTrack.setAttribute('aria-label', 'Pass Rate ' + passRatePercent + '%');
+          passTrack.querySelector('span').style.width = passRatePercent + '%';
+          passValue.textContent = passRatePercent + '%';
         });
       }).catch(function (error) {
         window.showToast('載入 TestRun 失敗：' + error.message, 'error');
@@ -569,10 +567,12 @@
     });
 
     document.getElementById('select-visible-cases').addEventListener('click', function () {
-      caseRows.forEach(function (row) {
-        if (!row.classList.contains('is-hidden')) {
-          row.querySelector('input').checked = true;
-        }
+      var inputs = Array.from(document.querySelectorAll('.testrun-case-row input'));
+      var shouldSelect = inputs.some(function (input) {
+        return !input.checked;
+      });
+      inputs.forEach(function (input) {
+        input.checked = shouldSelect;
       });
       updateSelectedCount();
     });
@@ -612,6 +612,16 @@
           var saveRow = releaseSaveButton.closest('[data-testrun-id]');
           if (saveCell && saveRow) {
             saveReleaseEdit(saveRow, saveCell);
+          }
+          return;
+        }
+        var releaseCancelButton = event.target.closest('[data-cancel-testrun-release]');
+        if (releaseCancelButton) {
+          event.preventDefault();
+          event.stopPropagation();
+          var cancelCell = releaseCancelButton.closest('[data-run-release]');
+          if (cancelCell) {
+            renderReleaseDisplay(cancelCell, cancelCell.dataset.runReleaseValue || '');
           }
           return;
         }

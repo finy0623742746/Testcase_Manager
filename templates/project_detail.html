@@ -9,7 +9,7 @@
     <p>{{ project.description or '無描述' }}</p>
   </div>
   <div class="toolbar">
-    <a class="button" href="{{ url_for('testrun_report', project_id=project.id) }}">Report</a>
+    <a class="button" href="{{ url_for('testrun_report', project_id=project.id, source='detail') }}">Report</a>
   </div>
 </section>
 
@@ -26,13 +26,12 @@
     </div>
     <div class="testrun-metric-section">
       <span class="summary-label">Pass Rate</span>
-      <div class="testrun-metric-value{% if project.pass_rate_percent is none %} testrun-metric-value-empty{% endif %}" id="detail-pass-rate-value">
-        {% if project.pass_rate_percent is not none %}
-          <div class="progress-track" id="detail-pass-rate-track" aria-label="Pass Rate {{ project.pass_rate_percent }}%">
-            <span style="width: {{ project.pass_rate_percent }}%"></span>
-          </div>
-        {% endif %}
-        <strong id="detail-pass-rate-percent">{{ project.pass_rate_percent if project.pass_rate_percent is not none else 'N/A' }}{% if project.pass_rate_percent is not none %}%{% endif %}</strong>
+      {% set pass_rate = project.pass_rate_percent if project.pass_rate_percent is not none else 0 %}
+      <div class="testrun-metric-value" id="detail-pass-rate-value">
+        <div class="progress-track" id="detail-pass-rate-track" aria-label="Pass Rate {{ pass_rate }}%">
+          <span style="width: {{ pass_rate }}%"></span>
+        </div>
+        <strong id="detail-pass-rate-percent">{{ pass_rate }}%</strong>
       </div>
     </div>
     <div class="testrun-metric-section">
@@ -71,6 +70,7 @@
       </label>
     </div>
     <div class="testrun-detail-actions">
+      <button class="button testrun-update-button" id="open-add-testrun-case-modal" type="button">+ TestCase</button>
       <button class="button testrun-update-button" id="save-testrun-statuses" type="button" disabled>Update</button>
     </div>
   </div>
@@ -174,6 +174,80 @@
   <div class="preview-drawer-content" id="run-preview-content"></div>
 </aside>
 
+<div class="modal-shell" id="testrun-add-case-modal" aria-hidden="true">
+  <div class="modal-overlay" data-close-add-testrun-case-modal></div>
+  <section class="modal-panel testrun-modal-panel" role="dialog" aria-modal="true" aria-labelledby="testrun-add-case-modal-title">
+    <div class="modal-header">
+      <div>
+        <h2 id="testrun-add-case-modal-title">新增 TestCase</h2>
+        <p class="modal-subtitle">依 Product/Version、Module 選取要加入的 TestCase</p>
+      </div>
+      <button class="close-button" type="button" data-close-add-testrun-case-modal aria-label="關閉">×</button>
+    </div>
+    <div class="modal-content testrun-modal-content">
+      <div class="testrun-picker">
+        <aside class="testrun-tree" aria-label="Product/Version 與 Module">
+          <button class="tree-filter-button active" type="button" data-add-filter-product="all" data-add-filter-module="all">全部 TestCase</button>
+          {% for product in testcase_hierarchy %}
+            <div class="tree-product">
+              <button class="tree-filter-button tree-product-button" type="button" data-add-filter-product="{{ product.id }}" data-add-filter-module="all">
+                {{ product.name }}
+              </button>
+              {% for module in product.modules %}
+                <button class="tree-filter-button tree-module-button" type="button" data-add-filter-product="{{ product.id }}" data-add-filter-module="{{ module.id }}">
+                  {{ module.name }}
+                </button>
+              {% endfor %}
+            </div>
+          {% endfor %}
+        </aside>
+
+        <section class="testrun-case-panel">
+          <div class="testrun-case-toolbar">
+            <div>
+              <strong>選擇 TestCase</strong>
+              <span id="add-selected-case-count">0 selected</span>
+            </div>
+            <button class="testrun-text-action" id="select-addable-cases" type="button">Select All</button>
+          </div>
+          <div class="testrun-case-list" id="add-testrun-case-list">
+            {% set has_cases = namespace(value=false) %}
+            {% for product in testcase_hierarchy %}
+              {% for module in product.modules %}
+                {% for case in module.cases %}
+                  {% set has_cases.value = true %}
+                  {% set is_added = case.id in existing_case_ids %}
+                  <label class="testrun-case-row{% if is_added %} is-added is-existing{% endif %}" data-add-case-row data-product-id="{{ product.id }}" data-module-id="{{ module.id }}" data-case-id="{{ case.id }}" data-existing-case="{{ 'true' if is_added else 'false' }}">
+                    <input type="checkbox" name="add_test_case_ids" value="{{ case.id }}" {% if is_added %}checked data-existing-case-input{% endif %}>
+                    <span class="testrun-case-main">
+                      <span class="testrun-case-title">{{ case.case_title }}</span>
+                      <span class="testrun-case-path">{{ product.name }} / {{ module.name }}</span>
+                    </span>
+                    <span class="priority-badge priority-{{ (case.priority or 'Medium')|lower }}">{{ case.priority or 'Medium' }}</span>
+                    <span class="testrun-case-actions">
+                      <button class="button preview-run-case-button" type="button" data-add-preview-case="{{ case.id }}">View</button>
+                    </span>
+                    {% if is_added %}
+                      <span class="testrun-added-overlay" data-added-overlay>Added</span>
+                    {% endif %}
+                  </label>
+                {% endfor %}
+              {% endfor %}
+            {% endfor %}
+            {% if not has_cases.value %}
+              <div class="empty-state">尚未有任何 TestCase 可選擇</div>
+            {% endif %}
+          </div>
+        </section>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="button outline" type="button" data-close-add-testrun-case-modal>Cancel</button>
+      <button class="button" id="save-add-testrun-cases" type="button">Save</button>
+    </div>
+  </section>
+</div>
+
 <div class="modal-shell" id="testrun-update-modal" aria-hidden="true">
   <div class="modal-overlay" data-close-testrun-update-modal></div>
   <section class="modal-panel testrun-update-modal-panel" role="dialog" aria-modal="true" aria-labelledby="testrun-update-modal-title">
@@ -207,17 +281,26 @@
 <script>
   (function () {
     var cases = {{ project.cases|tojson }};
+    var testcaseHierarchy = {{ testcase_hierarchy|tojson }};
     var casesById = {};
+    var allCasesById = {};
     var caseRows = Array.from(document.querySelectorAll('[data-case-row]'));
     var moduleGroups = Array.from(document.querySelectorAll('[data-module-group]'));
     var productGroups = Array.from(document.querySelectorAll('[data-product-group]'));
     var statusSelects = Array.from(document.querySelectorAll('.testrun-status-select'));
+    var addCaseRows = Array.from(document.querySelectorAll('[data-add-case-row]'));
+    var addFilterButtons = Array.from(document.querySelectorAll('[data-add-filter-product]'));
     var overlay = document.getElementById('run-preview-overlay');
     var drawer = document.getElementById('run-preview-drawer');
     var previewTitle = document.getElementById('run-preview-title');
     var previewContent = document.getElementById('run-preview-content');
     var closeButton = document.getElementById('close-run-preview');
     var projectId = {{ project.id }};
+    var openAddCaseButton = document.getElementById('open-add-testrun-case-modal');
+    var addCaseModal = document.getElementById('testrun-add-case-modal');
+    var addCaseCountNode = document.getElementById('add-selected-case-count');
+    var addCaseSaveButton = document.getElementById('save-add-testrun-cases');
+    var addCaseSelectAllButton = document.getElementById('select-addable-cases');
     var saveButton = document.getElementById('save-testrun-statuses');
     var statusFilter = document.getElementById('testrun-status-filter');
     var filteredEmptyState = document.getElementById('testrun-filter-empty-state');
@@ -230,6 +313,13 @@
 
     cases.forEach(function (caseItem) {
       casesById[String(caseItem.case_id)] = caseItem;
+    });
+    testcaseHierarchy.forEach(function (product) {
+      product.modules.forEach(function (module) {
+        module.cases.forEach(function (caseItem) {
+          allCasesById[String(caseItem.id)] = caseItem;
+        });
+      });
     });
 
     function escapeHtml(value) {
@@ -288,7 +378,7 @@
       if (!caseItem) {
         return;
       }
-      activePreviewCaseId = String(caseItem.case_id);
+      activePreviewCaseId = String(caseItem.case_id || caseItem.id);
       renderPreview(caseItem);
       overlay.classList.add('active');
       drawer.classList.add('active');
@@ -316,14 +406,7 @@
       var percent = projectData.pass_rate_percent;
       var track = document.getElementById('detail-pass-rate-track');
 
-      if (percent === null || percent === undefined) {
-        if (track) {
-          track.remove();
-        }
-        container.classList.add('testrun-metric-value-empty');
-        percentElement.textContent = 'N/A';
-        return;
-      }
+      percent = percent === null || percent === undefined ? 0 : percent;
 
       if (!track) {
         track = document.createElement('div');
@@ -379,6 +462,105 @@
     function closeUpdateModal() {
       updateModal.classList.remove('active');
       updateModal.setAttribute('aria-hidden', 'true');
+    }
+
+    function getAddableCaseInputs() {
+      return addCaseRows
+        .filter(function (row) { return row.dataset.existingCase !== 'true'; })
+        .map(function (row) { return row.querySelector('input[name="add_test_case_ids"]'); })
+        .filter(Boolean);
+    }
+
+    function getExistingCaseInputs() {
+      return addCaseRows
+        .filter(function (row) { return row.dataset.existingCase === 'true'; })
+        .map(function (row) { return row.querySelector('input[name="add_test_case_ids"]'); })
+        .filter(Boolean);
+    }
+
+    function syncExistingCaseOverlay(input) {
+      var row = input.closest('[data-add-case-row]');
+      if (!row || row.dataset.existingCase !== 'true') {
+        return;
+      }
+      var overlayNode = row.querySelector('[data-added-overlay]');
+      row.classList.toggle('is-cancel-added', !input.checked);
+      if (overlayNode) {
+        overlayNode.textContent = input.checked ? 'Added' : 'Cancel Added';
+      }
+    }
+
+    function updateAddCaseCount() {
+      var selected = getAddableCaseInputs().filter(function (input) { return input.checked; }).length;
+      addCaseCountNode.textContent = selected + ' selected';
+    }
+
+    function openAddCaseModal() {
+      addCaseModal.classList.add('active');
+      addCaseModal.setAttribute('aria-hidden', 'false');
+      updateAddCaseCount();
+    }
+
+    function closeAddCaseModal() {
+      addCaseModal.classList.remove('active');
+      addCaseModal.setAttribute('aria-hidden', 'true');
+      closePreview();
+    }
+
+    function applyAddCaseFilter(productId, moduleId) {
+      addCaseRows.forEach(function (row) {
+        var productMatches = productId === 'all' || row.dataset.productId === productId;
+        var moduleMatches = moduleId === 'all' || row.dataset.moduleId === moduleId;
+        row.classList.toggle('is-hidden', !(productMatches && moduleMatches));
+      });
+    }
+
+    function toggleAddableCases() {
+      var inputs = getAddableCaseInputs();
+      if (!inputs.length) {
+        window.showToast('沒有可新增的 TestCase', 'error', 'top-center');
+        return;
+      }
+      var shouldSelect = inputs.some(function (input) {
+        return !input.checked;
+      });
+      inputs.forEach(function (input) {
+        input.checked = shouldSelect;
+      });
+      updateAddCaseCount();
+    }
+
+    async function saveAddedCases() {
+      var selectedIds = getAddableCaseInputs().filter(function (input) {
+        return input.checked;
+      }).map(function (input) {
+        return Number(input.value);
+      });
+      var removeIds = getExistingCaseInputs().filter(function (input) {
+        return !input.checked;
+      }).map(function (input) {
+        return Number(input.value);
+      });
+      if (!selectedIds.length && !removeIds.length) {
+        window.showToast('沒有可保存的變更', 'error', 'top-center');
+        return;
+      }
+      addCaseSaveButton.disabled = true;
+      addCaseSaveButton.textContent = 'Saving...';
+      try {
+        if (selectedIds.length) {
+          await window.testrunApi.addTestCases(projectId, selectedIds);
+        }
+        for (var index = 0; index < removeIds.length; index += 1) {
+          await window.testrunApi.removeTestCase(projectId, removeIds[index]);
+        }
+        window.showToast('TestCase 已更新', 'success', 'top-center');
+        window.location.reload();
+      } catch (error) {
+        addCaseSaveButton.disabled = false;
+        addCaseSaveButton.textContent = 'Save';
+        window.showToast('更新 TestCase 失敗：' + error.message, 'error', 'top-center');
+      }
     }
 
     function syncRowState(caseItem) {
@@ -524,6 +706,40 @@
 
     saveButton.addEventListener('click', function () {
       openUpdateModal();
+    });
+
+    openAddCaseButton.addEventListener('click', openAddCaseModal);
+    addCaseSelectAllButton.addEventListener('click', toggleAddableCases);
+    addCaseSaveButton.addEventListener('click', function () {
+      saveAddedCases().catch(function (error) {
+        addCaseSaveButton.disabled = false;
+        addCaseSaveButton.textContent = 'Save';
+        window.showToast('更新 TestCase 失敗：' + error.message, 'error', 'top-center');
+      });
+    });
+    addFilterButtons.forEach(function (button) {
+      button.addEventListener('click', function () {
+        addFilterButtons.forEach(function (item) { item.classList.remove('active'); });
+        button.classList.add('active');
+        applyAddCaseFilter(button.dataset.addFilterProduct, button.dataset.addFilterModule);
+      });
+    });
+    document.getElementById('add-testrun-case-list').addEventListener('click', function (event) {
+      var previewButton = event.target.closest('[data-add-preview-case]');
+      if (previewButton) {
+        event.preventDefault();
+        openPreview(allCasesById[previewButton.dataset.addPreviewCase]);
+      }
+    });
+    document.getElementById('add-testrun-case-list').addEventListener('change', function (event) {
+      if (!event.target.matches('input[name="add_test_case_ids"]')) {
+        return;
+      }
+      syncExistingCaseOverlay(event.target);
+      updateAddCaseCount();
+    });
+    document.querySelectorAll('[data-close-add-testrun-case-modal]').forEach(function (element) {
+      element.addEventListener('click', closeAddCaseModal);
     });
 
     confirmUpdateButton.addEventListener('click', function () {

@@ -465,6 +465,95 @@ class Project:
             conn.close()
 
     @staticmethod
+    def add_test_cases(project_id, test_case_ids):
+        conn = get_connection()
+        try:
+            exists = conn.execute('SELECT id FROM testruns WHERE id = ?', (project_id,)).fetchone()
+            if not exists:
+                raise LookupError('TestRun not found')
+
+            normalized_ids = []
+            seen_ids = set()
+            for test_case_id in test_case_ids:
+                try:
+                    normalized_id = int(test_case_id)
+                except (TypeError, ValueError):
+                    raise ValueError(f'Invalid TestCase id: {test_case_id}')
+                if normalized_id not in seen_ids:
+                    seen_ids.add(normalized_id)
+                    normalized_ids.append(normalized_id)
+
+            if not normalized_ids:
+                raise ValueError('test_case_ids is required')
+
+            placeholders = ', '.join('?' for _ in normalized_ids)
+            existing_rows = conn.execute(
+                f'''SELECT test_case_id
+                    FROM testrun_test_cases
+                    WHERE project_id = ? AND test_case_id IN ({placeholders})''',
+                (project_id, *normalized_ids),
+            ).fetchall()
+            existing_ids = {row[0] for row in existing_rows}
+
+            candidate_ids = [test_case_id for test_case_id in normalized_ids if test_case_id not in existing_ids]
+            if not candidate_ids:
+                raise ValueError('No new TestCase to add')
+
+            found_rows = conn.execute(
+                f'SELECT id FROM test_cases WHERE id IN ({", ".join("?" for _ in candidate_ids)})',
+                candidate_ids,
+            ).fetchall()
+            found_ids = {row[0] for row in found_rows}
+            missing_ids = [test_case_id for test_case_id in candidate_ids if test_case_id not in found_ids]
+            if missing_ids:
+                raise ValueError(f'TestCase not found: {missing_ids[0]}')
+
+            for test_case_id in candidate_ids:
+                conn.execute(
+                    '''INSERT INTO testrun_test_cases (
+                        project_id, test_case_id, case_title, product_name, module_name,
+                        priority, preconditions, steps, expected_result, remark,
+                        test_case_created_at, test_case_updated_at
+                    )
+                    SELECT ?, t.id, t.case_title, p.name, m.name,
+                           t.priority, t.preconditions, t.steps, t.expected_result, t.remark,
+                           t.created_at, t.updated_at
+                    FROM test_cases t
+                    JOIN modules m ON t.module_id = m.id
+                    JOIN products p ON m.product_id = p.id
+                    WHERE t.id = ?''',
+                    (project_id, test_case_id),
+                )
+            conn.commit()
+            return len(candidate_ids)
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+    @staticmethod
+    def remove_test_case(project_id, test_case_id):
+        conn = get_connection()
+        try:
+            exists = conn.execute('SELECT id FROM testruns WHERE id = ?', (project_id,)).fetchone()
+            if not exists:
+                raise LookupError('TestRun not found')
+
+            cur = conn.execute(
+                'DELETE FROM testrun_test_cases WHERE project_id = ? AND test_case_id = ?',
+                (project_id, test_case_id),
+            )
+            if cur.rowcount != 1:
+                raise ValueError('TestCase not found in TestRun')
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+    @staticmethod
     def update(project_id, name, description, release_at=None):
         conn = get_connection()
         try:
