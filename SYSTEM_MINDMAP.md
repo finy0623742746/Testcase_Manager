@@ -1,10 +1,10 @@
 # TestCase 管理系統運作心智圖
 
-此心智圖以「功能使用」為主，用來描述目前系統可操作的功能範圍，並作為後續撰寫 TestCase 的依據。
+此心智圖以「使用者可操作的功能」為主，用來描述目前系統的操作範圍，並作為後續撰寫 TestCase 的依據。
 
 狀態標示：
 
-- `[已完成]`：目前系統已具備，或已有可操作的頁面/API
+- `[已完成]`：目前系統已具備，或已有可操作的頁面
 - `[未完成]`：已列入規劃，但尚未完成或仍需重構
 
 ```mermaid
@@ -12,127 +12,64 @@ mindmap
   root((TestCase 管理系統))
     已完成功能
       Product/Version 管理
-        項目列表標題使用灰底並垂直置中
         瀏覽 Product/Version 清單
         新增 Product/Version
         修改 Product/Version
         刪除 Product/Version
         搜尋 Product/Version
         進入 Module/TestCase 頁面
-      Module 管理
-        Module 摺疊標題使用加深灰底
-        Module 卡片支援展開與摺疊
-        Module 標題操作區垂直置中並使用淺灰底色
-        依 Product/Version 顯示 Module
+      Module/TestCase 管理
+        依 Product/Version 分組瀏覽 Module 與 TestCase
+        展開與收合 Module
         新增 Module
-        修改 Module 名稱
+        修改 Module
         刪除 Module
-        刪除 Module 時同步刪除底下 TestCase
-        無 Module 時停用新增 TestCase
-      TestCase 管理
-        Header 查詢 TestCase
-        搜尋結果以 Fetch API 載入
-        依 Product/Version 與 Module 歸類
-        同 Location 依建立時間排序
-        支援 20 50 100 筆後端分頁
-        依 Module 顯示 TestCase 清單
         新增 TestCase
         修改 TestCase
         刪除 TestCase
         預覽 TestCase
-        側邊面板編輯 TestCase
-        顯示 Case
-        顯示 Priority
-        Priority 支援 Critical
-        顯示 Remark
-        顯示 Update 日期
-      API 與系統工具
-        API 文件頁面
-        Product API
-        Module API
-        TestCase API
-        TestCase Hierarchy API
-        TestRun API
-        Admin Reset API
+        以側邊面板查看與編輯 TestCase
+        搜尋 TestCase
+        顯示 TestCase 的 Case、Priority、Remark 與更新日期
       TestRun 管理
-        主頁與明細摺疊標題使用加深灰底
-        主導覽入口
         瀏覽 TestRun 列表
-        以 Fetch API 載入 TestRun 列表與相關頁面資料
-        依月份分段顯示 TestRun
-        顯示月份 TestRun 數量
-        本月無資料時顯示浮動的 0_TestRun 建立區
-        僅本月份提供新增 TestRun 入口
-        頁面停留跨月時自動更新本月份
-        有資料月份支援展開與摺疊
-        當月預設展開且歷史月份預設收合
-        顯示進度百分比
-        顯示 Pass Rate
-        Pass Rate 無進度時顯示 0%
-        主頁 Actions 提供 Delete
-        各月份列表使用固定欄寬對齊
-        主頁 Created_Time 顯示日期
-        主頁 Created_Time 日期置中
-        以加號入口建立 TestRun
-        Release 編輯支援 Cancel 與 Save 文字操作
-        TestRun 名稱允許重複
-        TestRun API 支援指定歷史建立時間
-        以 Fetch API 建立 TestRun
-        依 Product/Version 選擇 TestCase
-        新增彈窗可 Select All 全選或取消全選 TestCase
-        新增彈窗底部操作顯示 Cancel 與 Save
-        以 View 按鈕預覽 TestCase
-        勾選 TestCase 不開啟預覽
-        更新執行狀態
-        以 Fetch API 即時更新執行狀態與摘要
+        新增 TestRun
+        修改 TestRun
+        刪除 TestRun
+        依月份分段瀏覽 TestRun
+        查看月份 TestRun 數量
+        依月份展開與收合 TestRun
+        查看 TestRun 進度與 Pass Rate
+        在 TestRun 主頁刪除 TestRun
+        編輯 Release
+        依 Product/Version 選擇 TestCase 建立 TestRun
+        全選或取消全選 TestCase
+        預覽 TestCase
+        更新 TestCase 執行狀態
         查看 TestRun 明細
-        明細以 Product/Version > Module 分組摺疊顯示
-        明細以下拉選單篩選執行狀態
-        明細集中預覽並 Update 已變更狀態
-        明細可追加 TestCase
-        明細可移除既有 TestCase 關聯且不影響來源 TestCase
-        明細追加 TestCase 時既有項目以 Added 或 Cancel Added 壓黑標示
-        Product Version 標題顯示 N_Module
-        Module 摺疊表格支援水平捲動
-        Module 摺疊表格欄位對齊並顯示展開箭頭與 N_Cases
-        明細顯示七種執行狀態
-        明細摘要顯示 Progress 與 Pass Rate
-        明細摘要顯示七種狀態數量
-        明細 Updated 顯示日期
-        產出 HTML Report
-        Report 以 Total 甜甜圈圖呈現七種狀態數量
-        Report 以 Product/Version > Module 分組清單呈現 TestCase Results
-        Report TestCase Results 顯示 Title Priority Status
-        建立時保存 TestCase 完整快照
-        來源 TestCase 修改或刪除不影響既有 TestRun
-      資料庫與設定
-        全站頁面使用淺灰背景
-        SQLite 資料庫
-        testcase_manager.db
-        自動建立資料表
-        schema.sql
-        .env 設定
+        依 Product/Version > Module 分組顯示 TestCase
+        篩選執行狀態
+        追加 TestCase 至既有 TestRun
+        移除 TestRun 與 TestCase 的關聯
+        查看明細中的七種執行狀態
+        查看明細中的狀態摘要
+      Report 與輸出
+        查看 TestRun Report
+        下載 TestRun Report PDF
+        以圖表方式查看狀態分布
+        以分組清單方式查看 TestCase Results
+      系統輔助功能
+        開啟 API 文件頁面
+        重置全部資料
     未完成功能
       匯入匯出
-        匯出 TestCase 功能
-        匯入 TestCase 功能
-        匯入資料檢核
-        匯出欄位格式定義
+        匯出 TestCase
+        匯入 TestCase
       快捷操作
         快捷選單
         常用操作入口
         批次操作入口
       其他
-        其他待規劃功能
         UI/UX 細節優化
         測試案例補齊
 ```
-
-## 維護規則
-
-每次完成或調整功能時，請同步更新此心智圖：
-
-- 將完成的節點由 `[未完成]` 改為 `[已完成]`
-- 新增功能時，先放入對應分類並標示狀態
-- 若功能範圍改變，請同步調整節點名稱，避免後續 TestCase 依據過期
-- 若功能已有明確測試情境，可在節點下方新增更細的操作項目

@@ -2,17 +2,20 @@
 
 一個以 Python Flask + SQLite 製作的 TestCase 管理系統，支援 `Product/Version > Module > TestCase` 的層級管理，以及 `TestRun` 相關功能。
 
-> 目前專案仍在開發中，README 以「目前已可使用的功能」為主，後續變更請以 [`規格紀錄.md`](./規格紀錄.md) 為準。
+> 目前專案仍在開發中，README 以「目前已可使用的功能」為主，後續變更請以 [`規格紀錄.md`](./規格紀錄.md) 與 [`AGENTS.md`](./AGENTS.md) 為準。
 
 ## 目前功能
 
 - `Product/Version` 列表管理：新增、修改、刪除與查詢
 - `Module/TestCase` 分層瀏覽：依 `Product/Version` 分組顯示 Module 與 TestCase
-- `TestCase` 新增、修改、刪除與預覽
-- `TestCase` 支援 `Remark`、`Priority`、`updated_at` 等欄位
-- `TestRun` 相關頁面與資料表
+- `TestCase` 新增、修改、刪除、預覽與側邊面板編輯
+- `TestCase` 支援 `Remark`、`Priority`、`updated_at` 等欄位，並可依 Case 關鍵字搜尋
+- `TestRun` 列表、建立、修改與刪除
+- `TestRun` 明細頁：依 `Product/Version > Module` 分組顯示 TestCase，支援狀態更新、追加 TestCase 與移除關聯
+- `TestRun` Report 頁與伺服器端 PDF 匯出
 - API 文件頁面：`/api`
-- SQLite 自動建表與資料庫初始化
+- REST API 支援 `Product`、`Module`、`TestCase`、`TestRun` 與 `TestRun` 狀態操作
+- SQLite 自動建表、資料庫初始化與啟動時欄位補齊
 - 支援 `POST /api/admin/reset` 重置全部資料
 
 ## 專案結構
@@ -98,28 +101,6 @@ SECRET_KEY=dev-secret-key
 
 使用 `python -m flask --app app run --debug` 啟動時，不需要另外以 PowerShell 設定 `FLASK_APP` 或 `FLASK_ENV`。正式使用時，請自行替換 `SECRET_KEY`，不要沿用範例值。
 
-## 開發中的注意事項
-
-- `app.py` 的設定已改為透過 `.env` 載入，避免硬編碼敏感資訊
-- 修改模板或樣式後，如果畫面沒有更新，通常需要重新啟動 Flask 並清除瀏覽器快取
-- 每次完成或調整功能時，請同步更新 [`SYSTEM_MINDMAP.md`](./SYSTEM_MINDMAP.md)，讓功能狀態能作為後續 TestCase 撰寫依據
-- 更新 [`規格紀錄.md`](./規格紀錄.md) 時，請使用三層結構：第一層 `# 規格紀錄`、第二層 `## yyyy-mm-dd` 日期、第三層 `### 主題`，主題內容以清單記錄
-- 規格日期由新到舊排列；同日期的新主題置於該日期最上方，同主題的新條目置於該主題最上方
-- 規格紀錄只記錄「當天實際改動」；新增或調整規格時不得改動過去日期的既有紀錄，若今天的改動取代或修正舊規格，請在今天日期下新增條目說明
-- 無法確認日期的既有內容統一放在 `## 未標日期`，並置於所有日期區段之後的檔案最下方
-- 第三層主題需同時對應「功能範圍」與「改動類型」；同一頁面或同一天的改動不一定屬於相同主題
-- 只有功能範圍及改動類型都相同時，才可將新增項目放入當日既有主題；否則應在同一日期下新增第三層主題
-- 一次調整若跨越多個獨立頁面或系統層級，需拆分成多個第三層主題；全站共用樣式、單頁 UI、API 與資料庫規則原則上分開記錄
-- 新增條目前需確認第三層標題能準確概括該主題下每一條紀錄；若無法概括，應拆分主題，不可只為容納新內容而擴大成籠統標題
-- 若同一主題的實際功能範圍整體改變，可調整第三層主題名稱，但調整後仍須能準確描述該主題下所有條目
-- 每個規格項目前方請標示影響範圍：`[前端]`、`[後端]` 或 `[前端/後端]`
-- 若內容有變動或移除，已記錄的內容也要做相對應調整，避免規格紀錄與實際實作不一致
-- 純 BUG 修正若只是恢復既有規格，不新增規格紀錄；若修正同時改變既有行為或規格，才更新對應條目
-- 每次完成當日規格更新後，需重新檢查當日所有第三層標題與條目是否一致，並確認沒有跨主題混放
-- 新增或調整 API 時，請同步更新 [`api-spec.yaml`](./api-spec.yaml)，讓 `http://127.0.0.1:5000/api` 的 API 文件保持最新
-- 新功能或新頁面的後端資料必須透過 Fetch/XHR API 載入
-- 純前端錯誤必須輸出至瀏覽器 Console，保留足以定位問題的錯誤資訊
-
 ## AI 協作說明
 
 本專案在開發過程中有使用 AI 工具協助撰寫、修改與除錯；實際的架構選擇、功能整合與內容審查由作者完成。
@@ -130,6 +111,7 @@ SECRET_KEY=dev-secret-key
 - [`schema.sql`](./schema.sql)：資料表建立語法
 - [`SYSTEM_MINDMAP.md`](./SYSTEM_MINDMAP.md)：系統功能心智圖與完成狀態
 - [`規格紀錄.md`](./規格紀錄.md)：功能變更與 UI 調整紀錄
+- [`AGENTS.md`](./AGENTS.md)：本專案的持久性開發與寫入規範
 
 ## 常見問題
 
