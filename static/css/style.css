@@ -753,6 +753,95 @@ th {
 .product-list-heading .product-add-button {
   align-self: center;
 }
+.testcase-import-modal-panel {
+  width: min(1180px, calc(100vw - 2rem));
+}
+.testcase-import-preview-modal-panel {
+  width: min(1380px, calc(100vw - 2rem));
+}
+.testcase-import-preview {
+  margin-top: 1.25rem;
+}
+.testcase-import-preview h3 {
+  margin: 0 0 0.75rem;
+}
+.testcase-import-errors {
+  margin: 0 0 0.9rem;
+  padding: 0.75rem 1rem 0.75rem 2rem;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  color: #b91c1c;
+  background: #fef2f2;
+}
+.testcase-import-errors:empty {
+  display: none;
+}
+.testcase-import-guidance {
+  margin-bottom: 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #1e40af;
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
+.testcase-import-guidance p {
+  margin: 0;
+}
+.testcase-import-guidance p + p {
+  margin-top: 0.45rem;
+}
+.testcase-import-guidance ol {
+  margin: 0.45rem 0 0;
+  padding-left: 1.4rem;
+}
+.testcase-import-guidance li + li {
+  margin-top: 0.2rem;
+}
+.testcase-import-file-heading {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.6rem;
+}
+.testcase-import-file-heading label {
+  margin-bottom: 0;
+}
+#testcase-import-file.is-invalid {
+  border-color: #dc2626;
+  background: #fff7f7;
+  animation: testcase-import-file-shake 0.42s ease-in-out;
+}
+@keyframes testcase-import-file-shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-7px); }
+  40%, 80% { transform: translateX(7px); }
+}
+.testcase-import-table-wrap {
+  max-height: 360px;
+  margin-bottom: 1rem;
+}
+.testcase-import-table {
+  min-width: 1080px;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.86rem;
+}
+.testcase-import-table th,
+.testcase-import-table td {
+  padding: 0.55rem 0.65rem;
+  border: 1px solid #e2e8f0;
+  text-align: left;
+  vertical-align: top;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.testcase-import-table th {
+  position: sticky;
+  top: 0;
+  background: #f1f5f9;
+}
 .panel-subtitle {
   color: #64748b;
   font-size: 0.95rem;
@@ -1114,6 +1203,20 @@ th {
   border: 1px solid #2563eb;
   background: #2563eb;
   color: #ffffff;
+}
+.page-header .toolbar #open-testcase-import-button {
+  min-height: 44px;
+  padding: 0.8rem 1rem;
+  border: 1px solid #2563eb;
+  border-radius: 12px;
+  background: #2563eb;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+}
+.page-header .toolbar #open-testcase-import-button:hover {
+  background: #1d4ed8;
+  color: #ffffff;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.1);
 }
 .product-detail-header .toolbar #open-case-modal-button:disabled {
   border-color: #cbd5e1;

@@ -7,6 +7,7 @@ from flask import Flask, render_template, request, redirect, url_for, flash, jso
 from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
 from database import initialize_schema, reset_all_data
+from excel_import import ImportValidationError, build_template, import_file, validate_import
 from models import Product, Module, TestCase, Project, STATUS_VALUES
 
 load_dotenv()
@@ -824,6 +825,54 @@ def api_delete_module(module_id):
         return jsonify({'error': str(e)}), 500
 
 # TestCases API
+def _import_upload():
+    upload = request.files.get('file')
+    if not upload or not upload.filename:
+        raise ImportValidationError('請選擇要上傳的 .xlsx 檔案。')
+    return upload.read(), upload.filename
+
+
+@app.route('/api/testcases/import/template', methods=['GET'])
+def api_download_testcase_import_template():
+    return send_file(
+        build_template(),
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name='testcase-import-template.xlsx',
+    )
+
+
+@app.route('/api/testcases/import/preview', methods=['POST'])
+def api_preview_testcase_import():
+    try:
+        file_bytes, filename = _import_upload()
+        preview = validate_import(file_bytes, filename)
+        return jsonify({
+            'message': 'Excel 預覽完成' if preview['valid'] else 'Excel 資料驗證失敗',
+            'data': preview,
+        }), 200
+    except ImportValidationError as error:
+        return jsonify({'error': str(error), 'errors': error.errors}), 400
+    except Exception as error:
+        app.logger.exception('Failed to preview testcase import')
+        return jsonify({'error': str(error)}), 500
+
+
+@app.route('/api/testcases/import', methods=['POST'])
+def api_import_testcases():
+    try:
+        file_bytes, filename = _import_upload()
+        confirmed = request.form.get('confirm_new') == 'true'
+        result = import_file(file_bytes, filename, confirm_new=confirmed)
+        return jsonify({'message': 'TestCase 匯入成功', 'data': result}), 201
+    except ImportValidationError as error:
+        status = 409 if '請先確認' in str(error) else 400
+        return jsonify({'error': str(error), 'errors': error.errors}), status
+    except Exception as error:
+        app.logger.exception('Failed to import testcases')
+        return jsonify({'error': str(error)}), 500
+
+
 @app.route('/api/testcases', methods=['GET'])
 def api_list_testcases():
     try:

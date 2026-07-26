@@ -10,6 +10,7 @@
 - `Module/TestCase` 分層瀏覽：依 `Product/Version` 分組顯示 Module 與 TestCase
 - `TestCase` 新增、修改、刪除、預覽與側邊面板編輯
 - `TestCase` 支援 `Remark`、`Priority`、`updated_at` 等欄位，並可依 Case 關鍵字搜尋
+- `TestCase` 支援 Excel `.xlsx` 匯入、欄位驗證、預覽確認與範例檔下載
 - `TestRun` 列表、建立、修改與刪除
 - `TestRun` 明細頁：依 `Product/Version > Module` 分組顯示 TestCase，支援狀態更新、追加 TestCase 與移除關聯
 - `TestRun` Report 頁與伺服器端 PDF 匯出
@@ -57,7 +58,7 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
 
-先將虛擬環境內的 `pip` 升級至新版，再安裝 Flask、python-dotenv 與 SQLAlchemy 等必要套件。
+先將虛擬環境內的 `pip` 升級至新版，再安裝 Flask、python-dotenv 與 SQLAlchemy & PDF 等必要套件。
 
 4. 建立本機環境設定
 

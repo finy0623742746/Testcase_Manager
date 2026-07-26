@@ -31,6 +31,8 @@ mindmap
         以側邊面板查看與編輯 TestCase
         搜尋 TestCase
         顯示 TestCase 的 Case、Priority、Remark 與更新日期
+        匯入 Excel TestCase
+        下載 Excel 匯入範例檔
       TestRun 管理
         瀏覽 TestRun 列表
         新增 TestRun
@@ -64,7 +66,6 @@ mindmap
     未完成功能
       匯入匯出
         匯出 TestCase
-        匯入 TestCase
       快捷操作
         快捷選單
         常用操作入口

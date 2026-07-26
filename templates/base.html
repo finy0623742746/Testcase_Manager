@@ -76,6 +76,30 @@
       }, 3000);
     };
 
+    window.showToastAfterReload = function (message, category, position) {
+      try {
+        window.sessionStorage.setItem('pending-toast', JSON.stringify({
+          message: message,
+          category: category,
+          position: position
+        }));
+      } catch (error) {
+        console.error('[Toast] Failed to preserve toast across page reload', error);
+      }
+      window.location.reload();
+    };
+
+    try {
+      var pendingToast = window.sessionStorage.getItem('pending-toast');
+      if (pendingToast) {
+        window.sessionStorage.removeItem('pending-toast');
+        var toastData = JSON.parse(pendingToast);
+        window.showToast(toastData.message, toastData.category, toastData.position);
+      }
+    } catch (error) {
+      console.error('[Toast] Failed to restore toast after page reload', error);
+    }
+
     window.setTimeout(function () {
       document.querySelectorAll('[data-toast]').forEach(function (toast) {
         toast.classList.add('is-hiding');

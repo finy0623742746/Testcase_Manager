@@ -283,6 +283,81 @@ paths:
           $ref: '#/components/responses/NotFound'
 
   # ==================== TestCases ====================
+  /api/testcases/import/template:
+    get:
+      tags:
+        - TestCases
+      summary: 下載 TestCase Excel 匯入範例檔
+      operationId: downloadTestCaseImportTemplate
+      responses:
+        '200':
+          description: 成功下載 `.xlsx` 範例檔
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+
+  /api/testcases/import/preview:
+    post:
+      tags:
+        - TestCases
+      summary: 驗證並預覽 TestCase Excel 匯入檔
+      operationId: previewTestCaseImport
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: 僅支援 `.xlsx`，第一個工作表欄位需依範例檔順序。
+      responses:
+        '200':
+          description: 回傳資料列、驗證錯誤及待新建 Product/Module；資料錯誤仍以 200 回傳供預覽顯示。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestCaseImportPreviewResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/testcases/import:
+    post:
+      tags:
+        - TestCases
+      summary: 確認後整批匯入 TestCase Excel 檔
+      operationId: importTestCases
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                confirm_new:
+                  type: boolean
+                  description: 檔案包含待新建 Product 或 Module 時必須為 true。
+      responses:
+        '201':
+          description: 成功以單一交易匯入所有 TestCase
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestCaseImportResultResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: 匯入需要先確認待新建 Product 或 Module
+
   /api/testcases:
     get:
       tags:
@@ -751,6 +826,56 @@ components:
           type: integer
           format: int64
           description: Unix timestamp in milliseconds
+    TestCaseImportPreviewResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        data:
+          type: object
+          properties:
+            valid:
+              type: boolean
+            rows:
+              type: array
+              items:
+                type: object
+            errors:
+              type: array
+              items:
+                type: object
+                properties:
+                  row:
+                    type: integer
+                  message:
+                    type: string
+            new_products:
+              type: array
+              items:
+                type: string
+            new_modules:
+              type: array
+              items:
+                type: object
+                properties:
+                  product:
+                    type: string
+                  module:
+                    type: string
+    TestCaseImportResultResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        data:
+          type: object
+          properties:
+            created_products:
+              type: integer
+            created_modules:
+              type: integer
+            created_testcases:
+              type: integer
     MessageResponse:
       type: object
       properties:

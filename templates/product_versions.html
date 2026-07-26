@@ -5,6 +5,9 @@
     <h1>Product/Version</h1>
     <p>點擊項目進入 TestCase 管理頁</p>
   </div>
+  <div class="toolbar">
+    <button class="button outline" id="open-testcase-import-button" type="button">+ Excel Import</button>
+  </div>
 </section>
 
 <section class="panel">
@@ -41,6 +44,67 @@
   </ul>
 
 </section>
+
+<div id="testcase-import-modal" class="modal-shell" aria-hidden="true">
+  <div class="modal-overlay" data-close-import-modal></div>
+  <div class="modal-panel testcase-import-modal-panel" role="dialog" aria-modal="true" aria-labelledby="testcase-import-modal-title">
+    <div class="modal-header">
+      <h2 id="testcase-import-modal-title">Excel 匯入</h2>
+      <button class="close-button" type="button" data-close-import-modal>✕</button>
+    </div>
+    <div class="modal-content">
+      <div class="testcase-import-guidance">
+        <strong>Excel 格式規格：</strong>
+        <ol>
+          <li>僅支援 .xlsx 格式；請先下載範例檔並依指定欄位填寫</li>
+          <li>Product、Module、Case 為必填欄位</li>
+          <li>Preconditions、Steps、Expected Result、Remark 可留白</li>
+          <li>Priority 可填入 Low、Medium、High、Critical</li>
+          <li>Priority 留白時，系統預設為 Medium</li>
+        </ol>
+      </div>
+      <form id="testcase-import-form" class="form-card modal-form" novalidate>
+        <div class="field-group">
+          <div class="testcase-import-file-heading">
+            <label for="testcase-import-file">Excel 檔案（.xlsx）</label>
+            <a class="testrun-text-action" href="{{ url_for('api_download_testcase_import_template') }}">下載範例檔</a>
+          </div>
+          <input id="testcase-import-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
+        </div>
+        <div class="button-row button-row-end">
+          <button id="preview-testcase-import-button" type="submit">Upload</button>
+          <button class="button outline" type="button" data-close-import-modal>Cancel</button>
+        </div>
+      </form>
+      <ul id="testcase-import-errors" class="testcase-import-errors"></ul>
+    </div>
+  </div>
+</div>
+
+<div id="testcase-import-preview-modal" class="modal-shell" aria-hidden="true">
+  <div class="modal-overlay" data-close-import-preview-modal></div>
+  <div class="modal-panel testcase-import-preview-modal-panel" role="dialog" aria-modal="true" aria-labelledby="testcase-import-preview-modal-title">
+    <div class="modal-header">
+      <h2 id="testcase-import-preview-modal-title">Excel 匯入預覽</h2>
+      <button class="close-button" type="button" data-close-import-preview-modal>✕</button>
+    </div>
+    <div class="modal-content">
+      <section class="testcase-import-preview">
+        <p id="testcase-import-preview-count" class="modal-subtitle"></p>
+        <div class="table-wrap testcase-import-table-wrap">
+          <table class="testcase-import-table">
+            <thead><tr><th>列</th><th>Product</th><th>Module</th><th>Case</th><th>Preconditions</th><th>Steps</th><th>Expected Result</th><th>Priority</th><th>Remark</th></tr></thead>
+            <tbody id="testcase-import-preview-body"></tbody>
+          </table>
+        </div>
+        <div class="button-row button-row-end">
+          <button id="confirm-testcase-import-button" type="button" disabled>Confirm</button>
+          <button class="button outline" type="button" data-back-to-import-modal>Back</button>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
 
 <template id="product-draft-template">
   <li class="product-list-item is-editing is-new-product" data-product-id="draft" data-product-name="" data-new-product="true">
@@ -221,7 +285,7 @@
       var draftMode = isDraftRow(row);
 
       if (!name) {
-        window.showToast('請輸入 Product/Version 名稱', 'error');
+        window.showToast('請輸入 Product/Version 名稱', 'error', 'top-center');
         input.focus();
         return;
       }
@@ -257,7 +321,7 @@
           window.showToast('Product/Version 已更新', 'success', 'top-center');
         }
       } catch (error) {
-        window.showToast((draftMode ? '建立失敗：' : '更新失敗：') + error.message, 'error');
+        window.showToast((draftMode ? '建立失敗：' : '更新失敗：') + error.message, 'error', 'top-center');
       } finally {
         saveButton.disabled = false;
         saveButton.textContent = '✓';
@@ -321,10 +385,9 @@
           window.testcaseApi.requestJson('/api/products/' + productId, {
             method: 'DELETE',
           }).then(function () {
-            window.showToast('Product/Version 已刪除', 'success', 'top-center');
-            window.location.reload();
+            window.showToastAfterReload('Product/Version 已刪除', 'success', 'top-center');
           }).catch(function (error) {
-            window.showToast('刪除失敗：' + error.message, 'error');
+            window.showToast('刪除失敗：' + error.message, 'error', 'top-center');
           });
         }
         return;
@@ -397,4 +460,5 @@
 
   })();
 </script>
+<script src="{{ url_for('static', filename='js/testcase_import.js') }}"></script>
 {% endblock %}
